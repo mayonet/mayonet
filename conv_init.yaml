@@ -1,30 +1,32 @@
 !obj:pylearn2.train.Train {
     dataset: &train !obj:dataset.Dataset {
         which_set: 'train',
-        batch_size: %(batch_size)i
+        batch_size: %(batch_size)i,
+        partial: %(partial)i
     },
     model: !obj:pylearn2.models.mlp.MLP {
         batch_size: %(batch_size)i,
         input_space: !obj:pylearn2.space.Conv2DSpace {
             shape: [64, 64],
-            num_channels: 1
+            num_channels: 1,
+            axes: ['b', 0, 1, 'c']
         },
         layers: [ !obj:pylearn2.models.mlp.ConvRectifiedLinear {
                      layer_name: 'h2',
-                     output_channels: 64,
+                     output_channels: 32,
                      irange: .05,
                      kernel_shape: [5, 5],
                      pool_shape: [4, 4],
                      pool_stride: [2, 2],
                      max_kernel_norm: 1.9365
-                 }, !obj:pylearn2.models.mlp.ConvRectifiedLinear {
-                     layer_name: 'h3',
-                     output_channels: 64,
-                     irange: .05,
-                     kernel_shape: [5, 5],
-                     pool_shape: [4, 4],
-                     pool_stride: [2, 2],
-                     max_kernel_norm: 1.9365
+                 #}, !obj:pylearn2.models.mlp.ConvRectifiedLinear {
+                 #    layer_name: 'h3',
+                 #    output_channels: 64,
+                 #    irange: .05,
+                 #    kernel_shape: [5, 5],
+                 #    pool_shape: [4, 4],
+                 #    pool_stride: [2, 2],
+                 #    max_kernel_norm: 1.9365
                  }, !obj:pylearn2.models.mlp.Softmax {
                      max_col_norm: 1.9365,
                      layer_name: 'y',
@@ -43,18 +45,20 @@
             {
                 'train' : !obj:dataset.Dataset {
                               which_set: 'train',
-                              batch_size: %(batch_size)i
+                              batch_size: %(batch_size)i,
+                              partial: %(partial)i
                           },
                 'valid' : !obj:dataset.Dataset {
                               which_set: 'valid',
-                              batch_size: %(batch_size)i
+                              batch_size: %(batch_size)i,
+                              partial: %(partial)i
                           }
             },
         cost: !obj:pylearn2.costs.cost.SumOfCosts { costs: [
             !obj:pylearn2.costs.cost.MethodCost {
                 method: 'cost_from_X'
             }, !obj:pylearn2.costs.mlp.WeightDecay {
-                coeffs: [ .00005, .00005, .00005 ]
+                coeffs: [ .00005, .00005 ]
             }
             ]
         },

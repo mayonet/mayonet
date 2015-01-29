@@ -39,7 +39,7 @@ def _make_dividible_by_batch(indexi, batch_size):
 
 
 class Dataset(dense_design_matrix.DenseDesignMatrix):
-    def __init__(self, which_set='train', batch_size=100):
+    def __init__(self, which_set='train', batch_size=100, partial=0):
         # we define here:
         dtype = 'uint8'
         axes = ('b', 0, 1, 'c')
@@ -52,6 +52,8 @@ class Dataset(dense_design_matrix.DenseDesignMatrix):
         self.n_classes = len(self.label_names)
 
         d = list(_iterate_train_data_paths())
+        if partial == 1:
+            d = d[:2000]
         random.seed(20015)
         random.shuffle(d)
         fns, labels = zip(*d)
@@ -61,10 +63,12 @@ class Dataset(dense_design_matrix.DenseDesignMatrix):
         lenx = len(labels)
         # x = np.zeros((lenx, self.img_size), dtype=dtype)
         x = np.zeros((lenx,) + self.img_shape, dtype=dtype)
+        #y = np.zeros((lenx, self.n_classes), dtype=dtype)
         y = np.zeros((lenx, 1), dtype=dtype)
 
         for i in range(lenx):
             x[i] = resize_image(imread(fns[i], as_grey=True))[:, :, np.newaxis]#.reshape(self.img_size)
+            #y[i, self.label_to_int[labels[i]]] = 1
             y[i] = self.label_to_int[labels[i]]
 
         for train_i, valid_i in StratifiedKFold(labels, 5):
