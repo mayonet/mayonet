@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import print_function
 import glob
 import os
 from skimage.io import imread, imsave
@@ -8,8 +9,8 @@ import sys
 
 CROP_SIZE = 64
 
-TRAIN_DIR_IN = '/media/marat/MySSD/plankton/train'
-TRAIN_DIR_OUT = '/media/marat/MySSD/plankton/train_fixed'
+TRAIN_DIR_IN = '/plankton/train'
+TRAIN_DIR_OUT = '/plankton/train_fixed'
 
 
 def resize_image(img):
@@ -52,4 +53,6 @@ def main():
     print()
     print('Executed in %.1f seconds' % (time() - script_start_time))
 
-main()
+
+if __name__ == '__main__':
+    main()
