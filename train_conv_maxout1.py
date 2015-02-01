@@ -13,13 +13,15 @@ from pylearn2.utils import serial
 
 from dataset import Dataset
 
-trn = Dataset(which_set='train', one_hot=True)
+BATCH_SIZE = 64
 
-tst = Dataset(which_set='valid', one_hot=True)
+trn = Dataset(which_set='train', one_hot=True, batch_size=BATCH_SIZE)
+
+tst = Dataset(which_set='valid', one_hot=True, batch_size=BATCH_SIZE)
 
 in_space = Conv2DSpace(shape=(64, 64),
                        num_channels=1,
-                       axes=('b', 0, 1, 'c'))
+                       axes=('c', 0, 1, 'b'))
 
 l1 = maxout.MaxoutConvC01B(layer_name='l1',
                            pad=4,
@@ -66,7 +68,7 @@ l3 = maxout.MaxoutConvC01B(layer_name='l3',
 
 l4 = maxout.Maxout(layer_name='l4',
                    irange=.005,
-                   num_units=200,
+                   num_units=500,
                    num_pieces=5,
                    max_col_norm=1.9)
 
@@ -85,7 +87,7 @@ mdl = mlp.MLP(layers,
               input_space=in_space)
 
 trainer = sgd.SGD(learning_rate=.17,
-                  batch_size=64,
+                  batch_size=BATCH_SIZE,
                   learning_rule=learning_rule.Momentum(.5),
                   # Remember, default dropout is .5
                   cost=Dropout(input_include_probs={'l1': .8},

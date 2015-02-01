@@ -2,7 +2,8 @@
     dataset: &train !obj:dataset.Dataset {
         which_set: 'train',
         batch_size: %(batch_size)i,
-        partial: %(partial)i
+        partial: %(partial)i,
+        one_hot: True
     },
     model: !obj:pylearn2.models.mlp.MLP {
         batch_size: %(batch_size)i,

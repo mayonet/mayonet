@@ -3,6 +3,7 @@ import os
 import random
 
 from pylearn2.datasets import dense_design_matrix
+from pylearn2.space import Conv2DSpace
 from pylearn2.utils import string_utils
 import numpy as np
 
@@ -38,8 +39,62 @@ def _make_divisible_by_batch(indexi, batch_size):
     array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1])
     """
     n = len(indexi)
-    to_add = batch_size - (n % batch_size)
+    to_add = (batch_size - (n % batch_size)) % batch_size
     return np.concatenate((indexi, indexi[:to_add]))
+
+
+class PlanktonDataset(dense_design_matrix.DenseDesignMatrix):
+    def __init__(self, batch_size, which_set='train', one_hot=True):
+
+        self.unique_labels = _read_labels()
+        self.n_classes = len(self.unique_labels)
+        self.label_to_int = {self.unique_labels[i]: i for i in range(self.n_classes)}
+
+        d = list(_iterate_train_data_paths())
+        random.seed(11)
+        random.shuffle(d)
+        fns, labels = zip(*d)
+
+        n = len(fns)
+        x = np.zeros((n, 64*64))
+        y = np.zeros(n, dtype='uint8')
+
+        for i in range(n):
+            x[i] = resize_image(imread(fns[i], as_grey=True)).reshape((64*64,))
+            y[i] = self.label_to_int[labels[i]]
+
+        for train_i, valid_i in StratifiedKFold(labels, 6):
+            train_i = _make_divisible_by_batch(train_i, batch_size)
+            valid_i = _make_divisible_by_batch(valid_i, batch_size)
+            if which_set == 'test':
+                self.test_fns = _get_test_data_paths()
+                test_X = np.array([resize_image(imread(os.path.join(TEST_DATA_DIR, tmp), as_grey=True))[:, :, np.newaxis] for tmp in self.test_fns])
+                test_i = _make_divisible_by_batch(np.arange(test_X.shape[0]), batch_size)
+            else:
+                test_X= np.zeros(5)
+                test_i = range(3)
+
+            Xs = {'train': x[train_i],
+                  'valid': x[valid_i],
+                  'test': test_X[test_i]}
+
+            Ys = {'train': y[train_i],
+                  'valid': y[valid_i],
+                  'test': None}
+            break
+
+        x = np.cast['float32'](255 - Xs[which_set]) / 255
+        y = Ys[which_set]
+        y_labels = self.n_classes
+        if which_set == 'test':
+            y_labels = None
+
+        super(PlanktonDataset, self).__init__(X=x, y=y, y_labels=y_labels)
+        if one_hot:
+            self.convert_to_one_hot()
+        self.in_space = Conv2DSpace(shape=(64, 64),
+                                    num_channels=1,
+                                    axes=('b', 0, 1, 'c'))
 
 
 class Dataset(dense_design_matrix.DenseDesignMatrix):
@@ -89,8 +144,8 @@ class Dataset(dense_design_matrix.DenseDesignMatrix):
                 test_X = np.array([resize_image(imread(os.path.join(TEST_DATA_DIR, tmp), as_grey=True))[:, :, np.newaxis] for tmp in self.test_fns])
                 test_i = _make_divisible_by_batch(np.arange(test_X.shape[0]), batch_size)
             else:
-                test_X= np.zeros(1)
-                test_i = 0
+                test_X= np.zeros(5)
+                test_i = range(3)
 
 
             Xs = {'train': x[train_i],
