@@ -60,9 +60,11 @@ def read_image(fn, size, method):
     if method == 'liquid':
         new_img = np.zeros((size, size))
         with Image(filename=fn) as img:
+            img.liquid_rescale(size, size)
             for y, row in enumerate(img):
                 for x, elem in enumerate(row):
                     new_img[y, x] = elem.red_int8
+
     else:
         img = imread(fn, as_grey=True)
 
