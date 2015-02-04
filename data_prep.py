@@ -3,28 +3,83 @@ from __future__ import print_function
 import glob
 import os
 from skimage.io import imread, imsave
+from skimage.transform import resize
 from time import time
 import numpy as np
 import sys
+from wand.image import Image
 
-CROP_SIZE = 64
+CROP_SIZE = 80
 
 TRAIN_DIR_IN = '/plankton/train'
 TRAIN_DIR_OUT = '/plankton/train_fixed'
 
 
-def resize_image(img):
+def crop(img, new_sizes=(CROP_SIZE, CROP_SIZE)):
     """Crops image up to CROP_SIZExCROP_SIZE and fills with white space
     if image is smaller than CROP_SIZExCROP_SIZE"""
     h, w = img.shape
-    cropped = np.zeros((CROP_SIZE, CROP_SIZE), dtype=img.dtype) + 255
-    start_y = (CROP_SIZE - h) // 2
-    start_x = (CROP_SIZE - w) // 2
-    new_h, new_w = min(h, CROP_SIZE), min(w, CROP_SIZE)
+    cropped = np.zeros(new_sizes, dtype=img.dtype) + 255
+    start_y = (new_sizes[0] - h) // 2
+    start_x = (new_sizes[1] - w) // 2
+    new_h, new_w = min(h, new_sizes[0]), min(w, new_sizes[1])
     cropped[max(start_y, 0):(max(start_y, 0) + new_h),
             max(start_x, 0):(max(start_x, 0) + new_w)] = img[max(-start_y, 0):(max(-start_y, 0) + new_h),
                                                              max(-start_x, 0):(max(-start_x, 0) + new_w)]
     return cropped
+
+
+def blunt_resize(img, new_size):
+    return resize(img, (new_size, new_size), cval=255)*255
+
+
+def shrink(img, new_size):
+    h, w = img.shape
+    res = crop(img, (max(h, new_size), max(w, new_size)))
+    return blunt_resize(res, new_size)
+
+
+def rational_resize(img, new_size):
+    h, w = img.shape
+    t = max(h, w)
+    return blunt_resize(crop(img, (t, t)), new_size)
+
+
+def resize_image(img, size=CROP_SIZE, method='crop'):
+    if method == 'crop':
+        return crop(img, (size, size))
+    elif method == 'bluntresize':
+        return blunt_resize(img, size)
+    elif method == 'shrink':
+        return shrink(img, size)
+    elif method == 'rationalresize':
+        return rational_resize(img, size)
+
+
+def read_image(fn, size, method):
+    if method == 'liquid':
+        new_img = np.zeros((size, size))
+        with Image(filename=fn) as img:
+            for y, row in enumerate(img):
+                for x, elem in enumerate(row):
+                    new_img[y, x] = elem.red_int8
+    else:
+        img = imread(fn, as_grey=True)
+
+        if method == 'crop':
+            new_img = crop(img, (size, size))
+        elif method == 'bluntresize':
+            new_img = blunt_resize(img, size)
+        elif method == 'shrink':
+            new_img = shrink(img, size)
+        elif method == 'rationalresize':
+            new_img = rational_resize(img, size)
+        else:
+            raise Exception('Illegal method "%s"' % method)
+
+    return new_img.reshape((size * size,))
+
+    # return resize_image(imread(fn, as_grey=True), size, method).reshape((size * size,))
 
 
 def main():

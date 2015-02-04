@@ -1,4 +1,6 @@
 .idea
 *.pyc
 .idea/*
+.logs
 *.pkl
+*.gz

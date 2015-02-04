@@ -3,19 +3,20 @@ import os
 import random
 
 from pylearn2.datasets import dense_design_matrix
-from pylearn2.space import Conv2DSpace
-from pylearn2.utils import string_utils
+from pylearn2.datasets.preprocessing import Pipeline, GlobalContrastNormalization, ZCA
 import numpy as np
 
-from data_prep import resize_image
-from skimage.io import imread
+from data_prep import read_image
 from sklearn.cross_validation import StratifiedKFold
 import doctest
+from pylearn2.utils import serial
 
 
 DATA_DIR = '/plankton'
 TRAIN_DATA_DIR = os.path.join(DATA_DIR, 'train')
 TEST_DATA_DIR = os.path.join(DATA_DIR, 'test')
+
+CROP_SIZE = 80
 
 
 def _read_labels():
@@ -43,8 +44,56 @@ def _make_divisible_by_batch(indexi, batch_size):
     return np.concatenate((indexi, indexi[:to_add]))
 
 
+def make_pickles(batch_size, method='crop', size=CROP_SIZE):
+
+    preprocessor = Pipeline([#GlobalContrastNormalization(scale=55.)
+                             #ZCA()
+                             ])
+
+    print("preprocessors - none")
+
+    trn = PlanktonDataset(batch_size, 'train', image_size=size, method=method)
+    trn.apply_preprocessor(preprocessor, True)
+    serial.save(_pickle_fn(DATA_DIR, 'train', method, size), trn)
+
+    vld = PlanktonDataset(batch_size, 'valid', image_size=size, method=method)
+    vld.apply_preprocessor(preprocessor, False)
+    serial.save(_pickle_fn(DATA_DIR, 'valid', method, size), vld)
+
+    # tst = PlanktonDataset(batch_size, 'test', one_hot=False, method=method)
+    # tst.apply_preprocessor(preprocessor, False)
+    # serial.save(_pickle_fn(DATA_DIR, 'test', method, size), tst)
+
+
+def drop_pickles():
+    """Depricated"""
+    for which in ['train', 'test', 'valid']:
+
+        fn = os.path.join(DATA_DIR, which + '.pkl')
+        try:
+            os.remove(fn)
+        except OSError:
+            print('"%s" not found' % fn)
+
+
+def _pickle_fn(data_path, which_set, method, size):
+    return os.path.join(data_path, '%s_%s%d.pkl' % (which_set, method, size))
+
+
+def load_pickle(batch_size, which_set='train', method='crop', size=CROP_SIZE):
+    assert which_set in ['train', 'test', 'valid']
+
+    path = _pickle_fn(DATA_DIR, which_set, method, size)
+
+    if not os.path.isfile(path):
+        make_pickles(batch_size, method, size)
+
+    return serial.load(path)
+
+
 class PlanktonDataset(dense_design_matrix.DenseDesignMatrix):
-    def __init__(self, batch_size, which_set='train', one_hot=True):
+
+    def __init__(self, batch_size, which_set='train', one_hot=True, image_size=CROP_SIZE, resizing_method='crop'):
 
         self.unique_labels = _read_labels()
         self.n_classes = len(self.unique_labels)
@@ -56,11 +105,11 @@ class PlanktonDataset(dense_design_matrix.DenseDesignMatrix):
         fns, labels = zip(*d)
 
         n = len(fns)
-        x = np.zeros((n, 64*64))
+        x = np.zeros((n, image_size*image_size), dtype='float32')
         y = np.zeros(n, dtype='uint8')
 
         for i in range(n):
-            x[i] = resize_image(imread(fns[i], as_grey=True)).reshape((64*64,))
+            x[i] = read_image(fns[i], image_size, resizing_method)
             y[i] = self.label_to_int[labels[i]]
 
         for train_i, valid_i in StratifiedKFold(labels, 6):
@@ -68,7 +117,9 @@ class PlanktonDataset(dense_design_matrix.DenseDesignMatrix):
             valid_i = _make_divisible_by_batch(valid_i, batch_size)
             if which_set == 'test':
                 self.test_fns = _get_test_data_paths()
-                test_X = np.array([resize_image(imread(os.path.join(TEST_DATA_DIR, tmp), as_grey=True))[:, :, np.newaxis] for tmp in self.test_fns])
+                test_X = np.zeros((len(self.test_fns), image_size*image_size), dtype='float32')
+                for i, pic in enumerate(self.test_fns):
+                    test_X[i] = read_image(os.path.join(TEST_DATA_DIR, pic), image_size, resizing_method)
                 test_i = _make_divisible_by_batch(np.arange(test_X.shape[0]), batch_size)
             else:
                 test_X= np.zeros(5)
@@ -76,98 +127,30 @@ class PlanktonDataset(dense_design_matrix.DenseDesignMatrix):
 
             Xs = {'train': x[train_i],
                   'valid': x[valid_i],
+                  'all': x,
                   'test': test_X[test_i]}
 
             Ys = {'train': y[train_i],
                   'valid': y[valid_i],
+                  'all': y,
                   'test': None}
             break
 
-        x = np.cast['float32'](255 - Xs[which_set]) / 255
+        x = ((255 - Xs[which_set]) / 255.)
         y = Ys[which_set]
         y_labels = self.n_classes
+
         if which_set == 'test':
             y_labels = None
 
-        super(PlanktonDataset, self).__init__(X=x, y=y, y_labels=y_labels)
-        if one_hot:
-            self.convert_to_one_hot()
-        self.in_space = Conv2DSpace(shape=(64, 64),
-                                    num_channels=1,
-                                    axes=('b', 0, 1, 'c'))
-
-
-class Dataset(dense_design_matrix.DenseDesignMatrix):
-    def __init__(self, which_set='train', batch_size=128, partial=0, one_hot=False):
-        """
-        which_set = 'train', 'valid' or 'test'
-        """
-        # we define here:
-        dtype = 'uint8'
         axes = ('b', 0, 1, 'c')
 
-        # we also expose the following details:
-        self.img_shape = (64, 64, 1)
-        self.img_size = np.prod(self.img_shape)
-        self.label_names = _read_labels()
-        self.label_to_int = {self.label_names[i]: i for i in range(len(self.label_names))}
-        self.n_classes = len(self.label_names)
+        view_converter = dense_design_matrix.DefaultViewConverter((image_size, image_size, 1), axes)
 
-
-        d = list(_iterate_train_data_paths())
-        if partial == 1:
-            d = d[:2000]
-        random.seed(20015)
-        random.shuffle(d)
-        fns, labels = zip(*d)
-
-        lenx = len(labels)
-        # x = np.zeros((lenx, self.img_size), dtype=dtype)
-        x = np.zeros((lenx,) + self.img_shape, dtype=dtype)
+        super(PlanktonDataset, self).__init__(X=x, y=y, y_labels=y_labels, view_converter=view_converter)
         if one_hot:
-            y = np.zeros((lenx, self.n_classes), dtype=dtype)
-        else:
-            y = np.zeros((lenx, 1), dtype=dtype)
-
-        for i in range(lenx):
-            x[i] = resize_image(imread(fns[i], as_grey=True))[:, :, np.newaxis]
-            if one_hot:
-                y[i, self.label_to_int[labels[i]]] = 1
-            else:
-                y[i] = self.label_to_int[labels[i]]
-
-        for train_i, valid_i in StratifiedKFold(labels, 5):
-            train_i = _make_divisible_by_batch(train_i, batch_size)
-            valid_i = _make_divisible_by_batch(valid_i, batch_size)
-            if which_set == 'test':
-                self.test_fns = _get_test_data_paths()
-                test_X = np.array([resize_image(imread(os.path.join(TEST_DATA_DIR, tmp), as_grey=True))[:, :, np.newaxis] for tmp in self.test_fns])
-                test_i = _make_divisible_by_batch(np.arange(test_X.shape[0]), batch_size)
-            else:
-                test_X= np.zeros(5)
-                test_i = range(3)
-
-
-            Xs = {'train': x[train_i],
-                  'valid': x[valid_i],
-                  'test': test_X[test_i]}
-
-            Ys = {'train': y[train_i],
-                  'valid': y[valid_i],
-                  'test': None}
-            break
-
-        x = np.cast['float32'](Xs[which_set])
-        y = Ys[which_set]
-        y_labels = self.n_classes
-        if which_set == 'test':
-            y_labels = None
-
-        # view_converter = dense_design_matrix.DefaultViewConverter((64, 64, 1), axes)
-
-        # super(Dataset, self).__init__(X=x, y=y, view_converter=view_converter, y_labels=self.n_classes)
-
-        super(Dataset, self).__init__(topo_view=x, y=y, axes=axes, y_labels=y_labels)
+            self.convert_to_one_hot()
+            delattr(self, "y_labels")
 
 
 if __name__ == '__main__':
