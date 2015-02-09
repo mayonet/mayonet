@@ -33,6 +33,43 @@ def blunt_resize(img, new_size):
     return resize(img, (new_size, new_size), cval=255)*255
 
 
+def crop_white(img):
+    h, w = img.shape
+    xs = np.min(img, 0)
+    ys = np.min(img, 1)
+
+    left = 0
+    right = w-1
+    top = 0
+    bottom = h-1
+
+    for i in range(w):
+        if xs[i] < 255:
+            left = i
+            break
+
+    for i in range(h):
+        if ys[i] < 255:
+            top = i
+            break
+
+    for i in range(w, 0, -1):
+        if xs[i-1] < 255:
+            right = i
+            break
+
+    for i in range(h, 0, -1):
+        if ys[i-1] < 255:
+            bottom = i
+            break
+
+    return img[top:bottom, left:right]
+
+
+def blunt_after_crop(img, new_size):
+    return blunt_resize(crop_white(img), new_size)
+
+
 def shrink(img, new_size):
     h, w = img.shape
     res = crop(img, (max(h, new_size), max(w, new_size)))
@@ -76,6 +113,8 @@ def read_image(fn, size, method):
             new_img = shrink(img, size)
         elif method == 'rationalresize':
             new_img = rational_resize(img, size)
+        elif method == 'bluntaftercrop':
+            new_img = blunt_after_crop(img, size)
         else:
             raise Exception('Illegal method "%s"' % method)
 

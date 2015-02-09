@@ -7,6 +7,8 @@ import numpy as np
 from dataset import load_pickle, PlanktonDataset
 import gzip
 
+import rotator
+
 start_time = time()
 
 model_save_path = "best_last_model.pkl"
@@ -18,7 +20,15 @@ fname = 'results.csv.gz'
 mdl = serial.load(model_save_path)
 
 # ds = load_pickle(BATCH_SIZE, which_set='test')
-ds = PlanktonDataset(BATCH_SIZE, 'test', False, 64)
+ds = PlanktonDataset(BATCH_SIZE, 'test', False, 80, 'bluntresize')
+
+print("Dataset is done")
+
+window = (72, 72)
+rtr = rotator.Rotator(window, [], [ds])
+rtr.setup(1, 1, 1)
+
+print("Rotator finished")
 
 X = mdl.get_input_space().make_batch_theano()
 Y = mdl.fprop(X)
@@ -30,6 +40,8 @@ for i in xrange(ds.X.shape[0] / BATCH_SIZE):
     x_arg = ds.get_topological_view(x_arg)
     yhat.append(f(x_arg.astype(X.dtype)))
 y = np.vstack(yhat)
+
+print("Just one task left")
 
 
 header = ['image'] + ds.unique_labels

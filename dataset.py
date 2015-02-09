@@ -52,17 +52,19 @@ def make_pickles(batch_size, method='crop', size=CROP_SIZE):
 
     print("preprocessors - none")
 
-    trn = PlanktonDataset(batch_size, 'train', image_size=size, method=method)
+    trn = PlanktonDataset(batch_size, 'train', image_size=size, resizing_method=method)
     trn.apply_preprocessor(preprocessor, True)
     serial.save(_pickle_fn(DATA_DIR, 'train', method, size), trn)
 
-    vld = PlanktonDataset(batch_size, 'valid', image_size=size, method=method)
+    vld = PlanktonDataset(batch_size, 'valid', image_size=size, resizing_method=method)
     vld.apply_preprocessor(preprocessor, False)
     serial.save(_pickle_fn(DATA_DIR, 'valid', method, size), vld)
 
     # tst = PlanktonDataset(batch_size, 'test', one_hot=False, method=method)
     # tst.apply_preprocessor(preprocessor, False)
     # serial.save(_pickle_fn(DATA_DIR, 'test', method, size), tst)
+
+    print("made pickles")
 
 
 def drop_pickles():
