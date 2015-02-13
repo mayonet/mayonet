@@ -20,8 +20,10 @@ class Rotator(TrainExtension):
         self.originals = [ds.get_topological_view() for ds in randomize]
         self.offsets = list(product(x_offsets, y_offsets))
         if len(randomize) > 0:
+            self.originals = [ds.get_topological_view() for ds in randomize]
             self.init_image_shape = randomize[0].get_topological_view()[0].shape[:2]
         else:
+            self.originals = []
             self.init_image_shape = center[0].get_topological_view()[0].shape[:2]
         self.max_offset = [d-w for d, w in zip(self.init_image_shape, self.window)]
         self.center_offset = [d//2 for d in self.max_offset]
@@ -55,7 +57,7 @@ class Rotator(TrainExtension):
         img = rotate(img, choice(self.angles))
         if self.flip and randint(0, 1) == 0:
             img = np.fliplr(img)
-        # Костыли-костылики
+        # workaround
         img = data_prep.crop(img[:, :, 0]+255, [h, w])[:, :, np.newaxis]-255
         if self.init_image_shape != self.window:
             offset = [c1//2 + r for c1, r in zip(self.max_offset, choice(self.offsets))]

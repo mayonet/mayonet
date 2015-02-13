@@ -1,6 +1,7 @@
 .idea
 *.pyc
-.idea/*
-.logs
+logs
+submissions
 *.pkl
 *.gz
+*.csv
