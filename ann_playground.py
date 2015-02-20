@@ -46,10 +46,12 @@ len_in = train_x.shape[1]
 len_out = train_y.shape[1]
 
 
-c1 = ConvolutionalLayer((1, 3, 3), 16)
+c1 = ConvolutionalLayer((3, 3), 16, batch_size=100)
+m1 = MaxPool((2, 2))
+# a1 = PReLU()
 f = Flatten()
-ls = DenseLayer((28-2)**2 * 16, len_out, activation=T.nnet.softmax)
-mlp = MLP([c1, f, ls])
+ls = DenseLayer((28-2)**2 * 16 / 4, len_out, activation=T.nnet.softmax)
+mlp = MLP([c1, m1, f, ls])
 
 
 # h = 100

@@ -15,6 +15,7 @@ import theano.tensor as T
 #  Activation Functions
 #########################################
 from theano.tensor.nnet import conv2d
+from theano.tensor.signal.downsample import max_pool_2d
 
 
 def identity(X):
@@ -89,9 +90,9 @@ class NaiveBatchNormalization(ForwardPropogator):
 
 
 class ConvolutionalLayer(ForwardPropogator):
-    def __init__(self, input_shape, features_count, batch_size=None):
-        axes = (features_count,) + input_shape
-        self.image_shape = (batch_size,) + axes if batch_size is not None else None
+    def __init__(self, window, features_count, batch_size=None):
+        axes = (features_count, 1) + window
+        # self.image_shape = (batch_size,) + axes if batch_size is not None else None
         self.W = theano.shared(np.cast[theano.config.floatX](np.random.uniform(-0.05, 0.05, size=axes)), borrow=True)
         self.b = theano.shared(np.cast[theano.config.floatX](np.random.uniform(-0.05, 0.05, size=(1, features_count, 1, 1))),
                                borrow=True, broadcastable=(True, False, True, True))
@@ -100,7 +101,19 @@ class ConvolutionalLayer(ForwardPropogator):
         return self.W, self.b
 
     def forward(self, X):
-        return conv2d(X, self.W, image_shape=self.image_shape) + self.b
+        ## TODO image_shape
+        return conv2d(X, self.W) + self.b
+
+
+class MaxPool(ForwardPropogator):
+    def __init__(self, window):
+        self.window = window
+
+    def get_params(self):
+        return ()
+
+    def forward(self, X):
+        return max_pool_2d(X, ds=self.window)
 
 
 class Flatten(ForwardPropogator):
