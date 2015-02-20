@@ -52,7 +52,8 @@ class DenseLayer(ForwardPropogator):
         self.W = theano.shared(np.cast[theano.config.floatX](np.random.uniform(-0.05, 0.05,
                                                                                (self.in_dim, self.out_dim))),
                                borrow=True)
-        self.b = theano.shared(np.zeros((self.out_dim,), dtype=theano.config.floatX), borrow=True)
+        self.b = theano.shared(np.zeros((1, self.out_dim), dtype=theano.config.floatX), borrow=True,
+                               broadcastable=(True, False))
 
     def get_params(self):
         return self.W, self.b
