@@ -72,6 +72,7 @@ class PReLU(ForwardPropogator):
 
 
 class NaiveBatchNormalization(ForwardPropogator):
+    ## TODO Make it not naive
     def __init__(self, input_dimension, eps=1e-12):
         self.gamma = theano.shared(np.ones(input_dimension, dtype=theano.config.floatX), borrow=True)
         self.beta = theano.shared(np.ones(input_dimension, dtype=theano.config.floatX), borrow=True)
@@ -88,17 +89,18 @@ class NaiveBatchNormalization(ForwardPropogator):
 
 
 class ConvolutionalLayer(ForwardPropogator):
-    def __init__(self, window_shape, features_count):
-        axes = window_shape + (features_count,)
+    def __init__(self, input_shape, features_count, batch_size=None):
+        axes = (features_count,) + input_shape
+        self.image_shape = (batch_size,) + axes if batch_size is not None else None
         self.W = theano.shared(np.cast[theano.config.floatX](np.random.uniform(-0.05, 0.05, size=axes)), borrow=True)
-        self.b = theano.shared(np.cast[theano.config.floatX](np.random.uniform(-0.05, 0.05, size=(features_count,))),
-                               borrow=True)
+        self.b = theano.shared(np.cast[theano.config.floatX](np.random.uniform(-0.05, 0.05, size=(1, features_count, 1, 1))),
+                               borrow=True, broadcastable=(True, False, True, True))
 
     def get_params(self):
         return self.W, self.b
 
     def forward(self, X):
-        return conv2d(X, self.W)
+        return conv2d(X, self.W, image_shape=self.image_shape) + self.b
 
 
 class Flatten(ForwardPropogator):

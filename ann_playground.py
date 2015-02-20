@@ -1,6 +1,7 @@
 #!/usr/bin/env python2
 from __future__ import division, print_function
 from time import time
+import math
 
 import numpy as np
 from pylearn2.format.target_format import convert_to_one_hot
@@ -23,13 +24,21 @@ with gzip.open('mnist.pkl.gz', 'rb') as f:
 
 dtype_y = 'int32'
 
-train_x = train_set[0]
+
+def to_img(rows, channels_count=1):
+    assert len(rows.shape) == 2
+    n = rows.shape[0]
+    size = math.sqrt(rows.shape[1] // channels_count)
+    assert size*size == rows.shape[1] // channels_count
+    return rows.reshape(n, channels_count, size, size)
+
+train_x = to_img(train_set[0])
 train_y = convert_to_one_hot(train_set[1], dtype=dtype_y)
 
-valid_x = valid_set[0]
+valid_x = to_img(valid_set[0])
 valid_y = convert_to_one_hot(valid_set[1], dtype=dtype_y)
 
-test_x = test_set[0]
+test_x = to_img(test_set[0])
 test_y = convert_to_one_hot(test_set[1], dtype=dtype_y)
 
 
@@ -37,9 +46,9 @@ len_in = train_x.shape[1]
 len_out = train_y.shape[1]
 
 
-c1 = ConvolutionalLayer((3, 3), 32)
+c1 = ConvolutionalLayer((1, 3, 3), 16)
 f = Flatten()
-ls = DenseLayer((28-2)**2 * 32, len_out, activation=T.nnet.softmax)
+ls = DenseLayer((28-2)**2 * 16, len_out, activation=T.nnet.softmax)
 mlp = MLP([c1, f, ls])
 
 
@@ -77,7 +86,7 @@ momentum = 0.9
 epoch_count = 100
 batch_size = 100
 
-X = T.matrix('X', dtype=theano.config.floatX)
+X = T.tensor4('X4', dtype=theano.config.floatX)
 Y = T.matrix('Y', dtype=dtype_y)
 
 prob = mlp.forward(X)
