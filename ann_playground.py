@@ -8,9 +8,10 @@ from pylearn2.format.target_format import convert_to_one_hot
 
 import theano
 import theano.tensor as T
-theano.config.compute_test_value = 'warn'
-theano.config.exception_verbosity = 'high'
+# theano.config.compute_test_value = 'warn'
+# theano.config.exception_verbosity = 'high'
 theano.config.floatX = 'float32'
+theano.config.blas.ldflags = '-lblas -lgfortran'
 
 from ann import *
 
@@ -64,9 +65,22 @@ len_out = train_y.shape[1]
 # ls = DenseLayer(len_out, activation=T.nnet.softmax)
 # mlp = MLP([c1, b, f, ls], train_x.shape[1:])
 mlp = MLP([
+    # ConvolutionalLayer((3, 3), 16),
+    # MaxPool((2, 2)),
+    # PReLU(),
+    # ConvolutionalLayer((3, 3), 32),
+    # MaxPool((2, 2)),
+    # PReLU(),
     Flatten(),
-    DenseLayer(100, activation=ReLU),
-    DenseLayer(100, activation=ReLU),
+    # NaiveBatchNormalization(),
+    DenseLayer(500, activation=ReLU),
+    # NaiveBatchNormalization(),
+    DenseLayer(500, activation=ReLU),
+    # NaiveBatchNormalization(),
+    DenseLayer(500, activation=ReLU),
+    # NaiveBatchNormalization(),
+    DenseLayer(500, activation=ReLU),
+    # NaiveBatchNormalization(),
     DenseLayer(10, activation=T.nnet.softmax)
 ], train_x.shape[1:])
 
@@ -100,7 +114,7 @@ mlp = MLP([
 # l0.b.set_value(good_l0_b, False)
 
 
-learning_rate = 0.025
+learning_rate = 1e-2
 momentum = 0.9
 epoch_count = 100
 batch_size = 100

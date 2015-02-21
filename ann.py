@@ -53,6 +53,7 @@ class DenseLayer(ForwardPropogator):
         self.features_count = features_count
 
     def setup_input(self, input_shape):
+        assert len(input_shape) == 1, 'DenseLayer''s input must be 1 dimensional'
         self.in_dim = np.prod(input_shape)
         self.W = theano.shared(np.cast[theano.config.floatX](np.random.uniform(-0.05, 0.05,
                                                                                (self.in_dim, self.features_count))),
@@ -69,11 +70,9 @@ class DenseLayer(ForwardPropogator):
 
 
 class PReLU(ForwardPropogator):
-    def __init__(self, feature_count):
-        self.feature_count = feature_count
-
     def setup_input(self, input_shape):
-        self.alpha = theano.shared(np.array([0.25] * self.feature_count, dtype=theano.config.floatX), borrow=True)
+        init_vals = np.zeros(input_shape, dtype=theano.config.floatX) + 0.25
+        self.alpha = theano.shared(init_vals, borrow=True)
         return input_shape
 
     def get_params(self):
@@ -158,6 +157,12 @@ class ConvolutionalLayer(ForwardPropogator):
 class MaxPool(ForwardPropogator):
     def __init__(self, window):
         self.window = window
+
+    def setup_input(self, input_shape):
+        assert len(input_shape) == 3
+        chans, rows, cols = input_shape
+        return chans, (rows-1) // self.window[0] + 1, (cols-1) // self.window[1] + 1
+
 
     def get_params(self):
         return ()
