@@ -17,6 +17,14 @@ from ann import *
 
 np.random.seed(110)
 
+import os
+if not os.path.isfile('mnist.pkl.gz'):
+    import urllib
+    origin = (
+        'http://www.iro.umontreal.ca/~lisa/deep/data/mnist/mnist.pkl.gz'
+    )
+    print('Downloading data from %s' % origin)
+    urllib.urlretrieve(origin, 'mnist.pkl.gz')
 import gzip
 import cPickle
 with gzip.open('mnist.pkl.gz', 'rb') as f:
@@ -46,14 +54,21 @@ len_in = train_x.shape[1]
 len_out = train_y.shape[1]
 
 
-c1 = ConvolutionalLayer((3, 3), 16)
-m1 = MaxPool((2, 2))
-# a1 = PReLU()
-f = Flatten()
-b = NaiveBatchNormalization((28-2)**2 * 16 / 4),
-l = DenseLayer((28-2)**2 * 16 / 4, 100)
-ls = DenseLayer(100, len_out, activation=T.nnet.softmax)
-mlp = MLP([c1, m1, f, l, ls])
+# c1 = ConvolutionalLayer((3, 3), 16)
+# b = NaiveConvBN()
+# # m1 = MaxPool((2, 2))
+# # a1 = PReLU()
+# f = Flatten()
+# # a1 = PReLU((28-2)**2 * 16 // 4)
+# # l = DenseLayer((28-2)**2 * 16 // 4, 100)
+# ls = DenseLayer(len_out, activation=T.nnet.softmax)
+# mlp = MLP([c1, b, f, ls], train_x.shape[1:])
+mlp = MLP([
+    Flatten(),
+    DenseLayer(100, activation=ReLU),
+    DenseLayer(100, activation=ReLU),
+    DenseLayer(10, activation=T.nnet.softmax)
+], train_x.shape[1:])
 
 
 # h = 100
@@ -91,6 +106,7 @@ epoch_count = 100
 batch_size = 100
 
 X = T.tensor4('X4', dtype=theano.config.floatX)
+X.tag.test_value = valid_x[0:1]
 Y = T.matrix('Y', dtype=dtype_y)
 
 prob = mlp.forward(X)

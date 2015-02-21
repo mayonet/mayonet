@@ -37,23 +37,29 @@ def LeakyReLU(alpha):
 
 class ForwardPropogator:
     def forward(self, X):
-        raise NotImplementedError('Do not call functions from abstract class')
+        raise NotImplementedError('forward is not implemented')
 
     def get_params(self):
-        raise NotImplementedError('Do n'
-                                  'ot call functions from abstract class')
+        raise NotImplementedError('get_params not implemented. If no params, then return ()')
+
+    def setup_input(self, input_shape):
+        """Returns output_dimension"""
+        raise NotImplementedError('setup_input not implemented')
 
 
 class DenseLayer(ForwardPropogator):
-    def __init__(self, in_dim, out_dim, activation=identity):
+    def __init__(self, features_count, activation=identity):
         self.activation = activation
-        self.in_dim = in_dim
-        self.out_dim = out_dim
+        self.features_count = features_count
+
+    def setup_input(self, input_shape):
+        self.in_dim = np.prod(input_shape)
         self.W = theano.shared(np.cast[theano.config.floatX](np.random.uniform(-0.05, 0.05,
-                                                                               (self.in_dim, self.out_dim))),
+                                                                               (self.in_dim, self.features_count))),
                                borrow=True)
-        self.b = theano.shared(np.zeros((1, self.out_dim), dtype=theano.config.floatX), borrow=True,
+        self.b = theano.shared(np.zeros((1, self.features_count), dtype=theano.config.floatX), borrow=True,
                                broadcastable=(True, False))
+        return self.features_count,
 
     def get_params(self):
         return self.W, self.b
@@ -64,7 +70,11 @@ class DenseLayer(ForwardPropogator):
 
 class PReLU(ForwardPropogator):
     def __init__(self, feature_count):
-        self.alpha = theano.shared(np.array([0.25] * feature_count, dtype=theano.config.floatX), borrow=True)
+        self.feature_count = feature_count
+
+    def setup_input(self, input_shape):
+        self.alpha = theano.shared(np.array([0.25] * self.feature_count, dtype=theano.config.floatX), borrow=True)
+        return input_shape
 
     def get_params(self):
         return self.alpha,
@@ -73,12 +83,41 @@ class PReLU(ForwardPropogator):
         return T.maximum(0, X) + self.alpha*T.minimum(0, X)
 
 
+class NaiveConvBN(ForwardPropogator):
+    def __init__(self, eps=1e-12):
+        self.eps = eps
+
+    def setup_input(self, input_shape):
+        """Assumed input_shape to be ('c', 0, 1)"""
+        channels = input_shape[0]
+        self.gamma = theano.shared(np.ones((1, channels, 1, 1), dtype=theano.config.floatX), borrow=True,
+                                   broadcastable=(True, False, True, True))
+        self.beta = theano.shared(np.ones((1, channels, 1, 1), dtype=theano.config.floatX), borrow=True,
+                                  broadcastable=(True, False, True, True))
+        return input_shape
+
+    def get_params(self):
+        return self.gamma, self.beta
+
+    def forward(self, X):
+        s = X.shape
+        new_x = T.flatten(T.transpose(X, axes=(1, 0, 2, 3)), 2)
+        mean = T.mean(new_x, axis=1).reshape((1, s[1], 1, 1))
+        std = T.std(new_x, axis=1).reshape((1, s[1], 1, 1))
+        normalized_X = (X - mean) / (std*std + self.eps)
+        return normalized_X * self.gamma + self.beta
+        # return X * self.gamma + self.beta
+
+
 class NaiveBatchNormalization(ForwardPropogator):
     ## TODO Make it not naive
-    def __init__(self, input_dimension, eps=1e-12):
-        self.gamma = theano.shared(np.ones(input_dimension, dtype=theano.config.floatX), borrow=True)
-        self.beta = theano.shared(np.ones(input_dimension, dtype=theano.config.floatX), borrow=True)
+    def __init__(self, eps=1e-12):
         self.eps = eps
+
+    def setup_input(self, input_shape):
+        self.gamma = theano.shared(np.ones(input_shape, dtype=theano.config.floatX), borrow=True)
+        self.beta = theano.shared(np.ones(input_shape, dtype=theano.config.floatX), borrow=True)
+        return input_shape
 
     def get_params(self):
         return self.gamma, self.beta
@@ -91,19 +130,29 @@ class NaiveBatchNormalization(ForwardPropogator):
 
 
 class ConvolutionalLayer(ForwardPropogator):
-    def __init__(self, window, features_count, batch_size=None):
-        axes = (features_count, 1) + window
-        # self.image_shape = (batch_size,) + axes if batch_size is not None else None
-        self.W = theano.shared(np.cast[theano.config.floatX](np.random.uniform(-0.05, 0.05, size=axes)), borrow=True)
-        self.b = theano.shared(np.cast[theano.config.floatX](np.random.uniform(-0.05, 0.05, size=(1, features_count, 1, 1))),
+    def __init__(self, window, features_count):
+        self.features_count = features_count
+        self.window = window
+
+    def setup_input(self, input_shape):
+        """input_shape=('c', 0, 1)"""
+        assert input_shape[-1] == input_shape[-2], 'image must be square'
+        img_size = input_shape[-1]
+        channels = input_shape[0]
+        self.filter_shape = (self.features_count, channels) + self.window
+        self.W = theano.shared(np.cast[theano.config.floatX](np.random.uniform(-0.05, 0.05, size=self.filter_shape)),
+                               borrow=True)
+        self.b = theano.shared(np.cast[theano.config.floatX](np.random.uniform(-0.05, 0.05,
+                                                                               size=(1, self.features_count, 1, 1))),
                                borrow=True, broadcastable=(True, False, True, True))
+        out_image_size = img_size - self.window[0] + 1
+        return self.features_count, out_image_size, out_image_size
 
     def get_params(self):
         return self.W, self.b
 
     def forward(self, X):
-        ## TODO image_shape
-        return conv2d(X, self.W) + self.b
+        return conv2d(X, self.W, filter_shape=self.filter_shape) + self.b
 
 
 class MaxPool(ForwardPropogator):
@@ -119,7 +168,10 @@ class MaxPool(ForwardPropogator):
 
 class Flatten(ForwardPropogator):
     def forward(self, X):
-        return T.flatten(X, 2)
+        return T.flatten(X, outdim=2)
+
+    def setup_input(self, input_shape):
+        return (np.prod(input_shape),)
 
     def get_params(self):
         return ()
@@ -131,8 +183,15 @@ class Flatten(ForwardPropogator):
 
 
 class MLP(ForwardPropogator):
-    def __init__(self, layers):
+    def __init__(self, layers, input_shape):
         self.layers = layers
+        self.input_shape = input_shape
+        s = input_shape
+        for l in self.layers:
+            print('in: %s' % ','.join(map(str, s)))
+            s = l.setup_input(s)
+            print('out: %s' % ','.join(map(str, s)))
+        self.output_shape = s
 
     def forward(self, X):
         for l in self.layers:
