@@ -7,6 +7,7 @@ from pylearn2.termination_criteria import EpochCounter
 from pylearn2.train import Train
 from pylearn2.train_extensions import best_params, window_flip
 import time
+from itertools import product
 
 from mnist_dataset import MnistDataset
 from dataset import load_pickle
@@ -35,21 +36,34 @@ class Logger(object):
 
     def close(self):
         self.log.close()
+        sys.stdout = self.terminal
 
-for s in [80]:
-    model_save_path = "last_model.pkl"
+
+# image size
+s = 98
+BATCH_SIZE = 64
+
+med_r = [[0], [3]*1 + [2]*2 + [1]*4 + [0]*8]
+mea_r = [[0], [2]*1 + [1]*2 + [0]*4]
+mea = mea_r[0]
+med = med_r[0]
+
+exp_names = ['maxout1000']  # , 'maxout500', 'fc1000', 'maxout1000']
+
+for exp_name in exp_names:
+
+    # for iteration_num, (med, mea) in enumerate(product(med_r, mea_r)):
+    model_save_path = "last_model_%s.pkl" % exp_name
     watcher_save_path = "best_"+model_save_path
 
-    # logger_name = model_save_path
-    logger_name = time.strftime("%Y-%m-%dT%H-%M-%S")
+    logger_name = model_save_path
+    # logger_name = time.strftime("%Y-%m-%dT%H-%M-%S")
     if os.path.isfile(model_save_path):
         logger_name += "_c"
     else:
         logger_name += "_s"
     logger = Logger(logger_name + ".log")
     sys.stdout = logger
-
-    BATCH_SIZE = 64
 
     # trn = MnistDataset('train')
     # vld = MnistDataset('valid')
@@ -75,11 +89,25 @@ for s in [80]:
         mdl = push_monitor(serial.load(model_save_path), 'monitor')
         # mdl = serial.load(model_save_path)
     else:
+        c16 = mlp.ConvRectifiedLinear(output_channels=16,
+                                      kernel_shape=(3, 3),
+                                      pool_shape=(2, 2),
+                                      pool_stride=(2, 2),
+                                      layer_name='c16',
+                                      irange=0.05,
+                                      max_kernel_norm=.9365)
         c32 = mlp.ConvRectifiedLinear(output_channels=32,
-                                      kernel_shape=(5, 5),
+                                      kernel_shape=(3, 3),
                                       pool_shape=(2, 2),
                                       pool_stride=(2, 2),
                                       layer_name='c32',
+                                      irange=0.05,
+                                      max_kernel_norm=.9365)
+        c48 = mlp.ConvRectifiedLinear(output_channels=48,
+                                      kernel_shape=(3, 3),
+                                      pool_shape=(2, 2),
+                                      pool_stride=(2, 2),
+                                      layer_name='c48',
                                       irange=0.05,
                                       max_kernel_norm=.9365)
         c64 = mlp.ConvRectifiedLinear(output_channels=64,
@@ -89,95 +117,92 @@ for s in [80]:
                                       layer_name='c64',
                                       irange=0.05,
                                       max_kernel_norm=.9365)
-        c128_0 = mlp.ConvRectifiedLinear(output_channels=128,
-                                         kernel_shape=(3, 3),
-                                         pool_shape=(1, 1),
-                                         pool_stride=(1, 1),
-                                         layer_name='c128_0',
-                                         irange=0.05,
-                                         max_kernel_norm=.9365)
-        c128_1 = mlp.ConvRectifiedLinear(output_channels=128,
-                                         kernel_shape=(3, 3),
-                                         pool_shape=(1, 1),
-                                         pool_stride=(1, 1),
-                                         layer_name='c128_1',
-                                         irange=0.05,
-                                         max_kernel_norm=.9365)
-        c128_2 = mlp.ConvRectifiedLinear(output_channels=128,
-                                         kernel_shape=(3, 3),
-                                         pool_shape=(1, 1),
-                                         pool_stride=(1, 1),
-                                         layer_name='c128_2',
-                                         irange=0.05,
-                                         max_kernel_norm=.9365)
-        c128_3 = mlp.ConvRectifiedLinear(output_channels=128,
-                                         kernel_shape=(3, 3),
-                                         pool_shape=(1, 1),
-                                         pool_stride=(1, 1),
-                                         layer_name='c128_3',
-                                         irange=0.05,
-                                         max_kernel_norm=.9365)
-        c128_4 = mlp.ConvRectifiedLinear(output_channels=128,
-                                         kernel_shape=(3, 3),
-                                         pool_shape=(1, 1),
-                                         pool_stride=(1, 1),
-                                         layer_name='c128_4',
-                                         irange=0.05,
-                                         max_kernel_norm=.9365)
-        c128_5 = mlp.ConvRectifiedLinear(output_channels=128,
-                                         kernel_shape=(3, 3),
-                                         pool_shape=(2, 2),
-                                         pool_stride=(2, 2),
-                                         layer_name='c128_5',
-                                         irange=0.05,
-                                         max_kernel_norm=.9365)
 
-        # mo = maxout.Maxout(layer_name='mo',
-        #                    irange=.005,
-        #                    num_units=500,
-        #                    num_pieces=5,
-        #                    max_col_norm=.9)
+        mo500 = maxout.Maxout(layer_name='maxout500',
+                              irange=.005,
+                              num_units=500,
+                              num_pieces=5,
+                              max_col_norm=.9)
 
-        fc0 = mlp.RectifiedLinear(dim=1000,
-                                  layer_name='fc0',
-                                  irange=0.05,
-                                  max_col_norm=.9,
-                                  init_bias=0.01)
+        mo1000 = maxout.Maxout(layer_name='maxout1000',
+                               irange=.005,
+                               num_units=1000,
+                               num_pieces=5,
+                               max_col_norm=.9)
 
-        fc1 = mlp.RectifiedLinear(dim=1000,
-                                  layer_name='fc1',
-                                  irange=0.05,
-                                  max_col_norm=.9,
-                                  init_bias=0.01)
+        fc1000 = mlp.RectifiedLinear(dim=1000,
+                                     layer_name='fc1000',
+                                     irange=0.05,
+                                     max_col_norm=.9,
+                                     init_bias=0.01)
+
+        fc2500 = mlp.RectifiedLinear(dim=2500,
+                                     layer_name='fc2500',
+                                     irange=0.05,
+                                     max_col_norm=.9,
+                                     init_bias=0.01)
+
+        fc5000 = mlp.RectifiedLinear(dim=5000,
+                                     layer_name='fc5000',
+                                     irange=0.05,
+                                     max_col_norm=.9,
+                                     init_bias=0.01)
+
+        exp_layer = {L.layer_name: L for L in [mo500, mo1000, fc1000, fc2500, fc5000]}
+
+        # mo1 = maxout.Maxout(layer_name='mo1',
+        #                     irange=.005,
+        #                     num_units=500,
+        #                     num_pieces=5,
+        #                     max_col_norm=.9)
+
+        # fc0 = mlp.RectifiedLinear(dim=1000,
+        #                           layer_name='fc0',
+        #                           irange=0.05,
+        #                           max_col_norm=.9,
+        #                           init_bias=0.01)
+        #
+        # fc1 = mlp.RectifiedLinear(dim=1000,
+        #                           layer_name='fc1',
+        #                           irange=0.05,
+        #                           max_col_norm=.9,
+        #                           init_bias=0.01)
 
         output = mlp.Softmax(layer_name='y',
                              n_classes=n_classes,
                              irange=0.1,
                              max_col_norm=1.9365)
 
-        layers = [c32,
+        layers = [c16,
+                  c32,
+                  c48,
                   c64,
-                  c128_0,
-                  c128_1,
-                  c128_2,
-                  c128_3,
-                  c128_4,
-                  c128_5,
-                  fc0,
-                  fc1,
+                  exp_layer[exp_name],
                   output]
         mdl = mlp.MLP(layers=layers,
                       input_space=in_space
                       )
 
-    trainer = sgd.SGD(learning_rate=5e-2,
+    # layer_names = map(lambda x: x.layer_name, mdl.layers)[:-1]
+    # depth = len(layer_names)
+    # last_conv_layer_index = depth - 3.
+    # scales = map(lambda x: min(2., (last_conv_layer_index+x)/last_conv_layer_index), range(depth))
+    # probs = map(lambda x: 1/x, scales)
+    # dropout_scales = dict(zip(layer_names, scales))
+    # dropout_probs = dict(zip(layer_names, probs))
+    # print('dropout scales: ', dropout_scales)
+
+
+    trainer = sgd.SGD(learning_rate=1e-1,
                       batch_size=BATCH_SIZE,
                       learning_rule=learning_rule.Momentum(.9),
                       cost=Dropout(default_input_scale=1.,
-                                   default_input_include_prob=1.,
-                                   input_include_probs={'fc0': 0.5, 'fc1': 0.5},
-                                   input_scales={'fc0': 2., 'fc1': 2.}),
-                      # termination_criterion=EpochCounter(max_epochs=275),
+                                   input_include_probs={exp_name: 0.5},
+                                   input_scales={exp_name: 2.},
+                                   # input_scales=dropout_scales,
+                                   # input_include_probs=dropout_probs,
+                                   default_input_include_prob=1.),
+                      termination_criterion=EpochCounter(max_epochs=2000),
                       monitoring_dataset={'valid': vld,
                                           'train': trn})
 
@@ -195,20 +220,20 @@ for s in [80]:
 
     decay = sgd.OneOverEpoch(start=1, half_life=50)
 
-    rtr = rotator.Rotator(window=window, randomize=[trn], center=[vld],
-                          x_offsets=range(2),
-                          y_offsets=range(2),
-                          scales=[1.01**(p*abs(p)) for p in map(lambda x: x/2., range(-11, 9))],
-                          flip=True)
+    def create_rotator(randomize=(), center=()):
+        return rotator.Rotator(window=window, randomize=randomize, center=center,
+                               x_offsets=range(2),
+                               y_offsets=range(2),
+                               median_radii=med,
+                               mean_radii=mea,
+                               scales=[1.01**(p*abs(p)) for p in map(lambda x: x/2., range(-11, 9))],
+                               flip=True)
+    rtr = create_rotator(randomize=[trn], center=[vld])
+    vld_rtr = create_rotator(randomize=[vld])
 
-    vld_rtr = rotator.Rotator(window=window, randomize=[vld],
-                              x_offsets=range(2),
-                              y_offsets=range(2),
-                              scales=[1.01**(p*abs(p)) for p in map(lambda x: x/2., range(-11, 9))],
-                              flip=True)
-    vlr = validator.Validator(vld, [vld_rtr], BATCH_SIZE, start=15, period=15,
-                              iteration_count=20,
-                              best_file_name="validator_best_model.pkl")
+    vlr = validator.Validator(vld, [vld_rtr], BATCH_SIZE, start=25, period=25,
+                              # best_file_name="validator_best_model.pkl",
+                              iteration_count=10)
 
     experiment = Train(dataset=trn,
                        model=mdl,
@@ -217,7 +242,8 @@ for s in [80]:
                                    decay,
                                    # velocity,
                                    rtr,
-                                   vlr],
+                                   vlr,
+                                   decay],
                        save_path=model_save_path,
                        save_freq=1)
 

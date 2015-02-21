@@ -15,7 +15,7 @@ def log(message):
 
 start_time = time.time()
 
-model_save_path = "sub_last_model.pkl"
+model_save_path = "best_last_model.pkl"
 
 BATCH_SIZE = 32
 subsets = 4
@@ -27,7 +27,7 @@ mdl = serial.load(model_save_path)
 log('opened model')
 
 # ds = load_pickle(BATCH_SIZE, which_set='test')
-img_size = 80
+img_size = 98
 window = (img_size-2, img_size-2)
 ds = PlanktonDataset(BATCH_SIZE*subsets, 'test', False, img_size, 'bluntresize')
 log('created dataset')

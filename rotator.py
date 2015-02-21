@@ -5,16 +5,26 @@ from pylearn2.datasets.preprocessing import CentralWindow
 from pylearn2.train_extensions import TrainExtension
 from skimage.transform import rotate, rescale
 import data_prep
+from skimage.filter import rank
+from skimage.morphology import disk
+import multiprocessing
 
 
 class Rotator(TrainExtension):
 
-    def __init__(self, window, randomize, center=(), angles=range(360), x_offsets=(0, 1), y_offsets=(0, 1), flip=True,
+    def __init__(self, window, randomize, center=(),
+                 angles=range(360),
+                 x_offsets=(0, 1), y_offsets=(0, 1),
+                 median_radii=(0,),
+                 mean_radii=(0,),
+                 flip=True,
                  scales=(1,)):
         self.window = window
         self.randomize = randomize
         self.center = center
         self.angles = angles
+        self.median_radii = median_radii
+        self.mean_radii = mean_radii
         self.flip = flip
         self.scales = scales
         self.originals = [ds.get_topological_view() for ds in randomize]
@@ -57,8 +67,17 @@ class Rotator(TrainExtension):
         img = rotate(img, choice(self.angles))
         if self.flip and randint(0, 1) == 0:
             img = np.fliplr(img)
+        img = (255*(1-img[:, :, 0])).astype('uint8')
+
+        med = choice(self.median_radii)
+        if med > 0:
+            img = rank.median(img, disk(med))
+        mea = choice(self.mean_radii)
+        if mea > 0:
+            img = rank.mean(img, disk(mea))
         # workaround
-        img = data_prep.crop(img[:, :, 0]+255, [h, w])[:, :, np.newaxis]-255
+        img = data_prep.crop(img, [h, w])
+        img = 1-(img[:, :, np.newaxis]/255.)
         if self.init_image_shape != self.window:
             offset = [c1//2 + r for c1, r in zip(self.max_offset, choice(self.offsets))]
             img = self.crop(img, offset, self.window)
