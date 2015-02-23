@@ -47,6 +47,8 @@ class ForwardPropogator:
         """Returns output_dimension"""
         raise NotImplementedError('setup_input not implemented')
 
+    def self_updates(self):
+
 
 class DenseLayer(ForwardPropogator):
     def __init__(self, features_count, activation=identity):
@@ -107,6 +109,8 @@ class NaiveConvBN(ForwardPropogator):
         channels = input_shape[0]
         self.gamma = theano.shared(np.ones((1, channels, 1, 1), dtype=theano.config.floatX), borrow=True,
                                    broadcastable=(True, False, True, True))
+        self.beta = theano.shared(np.ones((1, channels, 1, 1), dtype=theano.config.floatX), borrow=True,
+                                  broadcastable=(True, False, True, True))
         return input_shape
 
     def get_params(self):
@@ -116,7 +120,7 @@ class NaiveConvBN(ForwardPropogator):
         mean = T.mean(X, axis=1, keepdims=True)
         var = T.var(X, axis=1, keepdims=True)
         normalized_X = (X - mean) / (var + self.eps)
-        return normalized_X * self.gamma
+        return normalized_X * self.gamma + self.beta
         # return X * self.gamma + self.beta
 
 
