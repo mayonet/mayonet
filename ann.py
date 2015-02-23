@@ -5,6 +5,7 @@
 #
 #################################
 
+from __future__ import print_function
 from itertools import chain
 import numpy as np
 import theano
@@ -83,6 +84,20 @@ class PReLU(ForwardPropogator):
         return T.maximum(0, X) + self.alpha*T.minimum(0, X)
 
 
+class NonLinearity(ForwardPropogator):
+    def __init__(self, activation=ReLU):
+        self.activation=activation
+
+    def setup_input(self, input_shape):
+        return input_shape
+
+    def get_params(self):
+        return ()
+
+    def forward(self, X):
+        return self.activation(X)
+
+
 class NaiveConvBN(ForwardPropogator):
     def __init__(self, eps=1e-12):
         self.eps = eps
@@ -95,14 +110,12 @@ class NaiveConvBN(ForwardPropogator):
         return input_shape
 
     def get_params(self):
-        return (self.gamma, 1)
+        return (self.gamma, 1),
 
     def forward(self, X):
-        s = X.shape
-        new_x = T.flatten(T.transpose(X, axes=(1, 0, 2, 3)), 2)
-        mean = T.mean(new_x, axis=1).reshape((1, s[1], 1, 1))
-        std = T.std(new_x, axis=1).reshape((1, s[1], 1, 1))
-        normalized_X = (X - mean) / (std*std + self.eps)
+        mean = T.mean(X, axis=1, keepdims=True)
+        var = T.var(X, axis=1, keepdims=True)
+        normalized_X = (X - mean) / (var + self.eps)
         return normalized_X * self.gamma
         # return X * self.gamma + self.beta
 
@@ -121,8 +134,8 @@ class NaiveBatchNormalization(ForwardPropogator):
         return (self.gamma, 1), (self.beta, 0)
 
     def forward(self, X):
-        mean = T.mean(X, axis=0)
-        std = T.std(X, axis=0)
+        mean = T.mean(X, axis=1, keepdims=True)
+        std = T.std(X, axis=1, keepdims=True)
         normalized_X = (X - mean) / (std*std + self.eps)
         return normalized_X * self.gamma + self.beta
 
@@ -139,18 +152,12 @@ class ConvolutionalLayer(ForwardPropogator):
         img_size = input_shape[-1]
         channels = input_shape[0]
         self.filter_shape = (self.features_count, channels) + self.window
-        #
-        # self.W = theano.shared(np.cast[theano.config.floatX](np.random.uniform(-0.05, 0.05, size=self.filter_shape)),
-        #                        borrow=True)
-        # self.b = theano.shared(np.cast[theano.config.floatX](np.random.uniform(-0.05, 0.05,
-        #                                                                        size=(1, self.features_count, 1, 1))),
-        #                        borrow=True, broadcastable=(True, False, True, True))
+
         if self.istdev is None:
             n = np.prod(self.window) * self.features_count
             std = np.sqrt(2./n)
         else:
             std = self.istdev
-
         self.W = theano.shared(np.cast[theano.config.floatX](np.random.normal(0, std, self.filter_shape)), borrow=True)
         self.b = theano.shared(np.zeros((1, self.features_count, 1, 1), dtype=theano.config.floatX), borrow=True,
                                broadcastable=(True, False, True, True))
@@ -185,7 +192,7 @@ class Flatten(ForwardPropogator):
         return T.flatten(X, outdim=2)
 
     def setup_input(self, input_shape):
-        return (np.prod(input_shape),)
+        return np.prod(input_shape),
 
     def get_params(self):
         return ()
@@ -197,14 +204,14 @@ class Flatten(ForwardPropogator):
 
 
 class MLP(ForwardPropogator):
-    def __init__(self, layers, input_shape):
+    def __init__(self, layers, input_shape, verbose=True):
         self.layers = layers
         self.input_shape = input_shape
         s = input_shape
         for l in self.layers:
-            print('in: %s' % ','.join(map(str, s)))
-            s = l.setup_input(s)
-            print('out: %s' % ','.join(map(str, s)))
+            outp = l.setup_input(s)
+            print('%s: %s -> %s' % (l.__class__.__name__, ','.join(map(str, s)), ','.join(map(str, outp))))
+            s = outp
         self.output_shape = s
 
     def forward(self, X):

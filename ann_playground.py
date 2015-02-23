@@ -54,59 +54,32 @@ test_y = convert_to_one_hot(test_set[1], dtype=dtype_y)
 len_in = train_x.shape[1]
 len_out = train_y.shape[1]
 
-
-# c1 = ConvolutionalLayer((3, 3), 16)
-# b = NaiveConvBN()
-# # m1 = MaxPool((2, 2))
-# # a1 = PReLU()
-# f = Flatten()
-# # a1 = PReLU((28-2)**2 * 16 // 4)
-# # l = DenseLayer((28-2)**2 * 16 // 4, 100)
-# ls = DenseLayer(len_out, activation=T.nnet.softmax)
-# mlp = MLP([c1, b, f, ls], train_x.shape[1:])
 mlp = MLP([
-    # ConvolutionalLayer((3, 3), 16),
-    # MaxPool((2, 2)),
-    # PReLU(),
-    # ConvolutionalLayer((3, 3), 32),
-    # MaxPool((2, 2)),
-    # PReLU(),
+    ConvolutionalLayer((3, 3), 16),
+    NaiveConvBN(),
+    MaxPool((3, 3)),
+    NonLinearity(),
+
+    ConvolutionalLayer((3, 3), 32),
+    NaiveConvBN(),
+    MaxPool((3, 3)),
+    NonLinearity(),
+
     Flatten(),
+
+    NaiveBatchNormalization(),
+    DenseLayer(100),
+    NonLinearity(),
+
     # NaiveBatchNormalization(),
-    DenseLayer(10000, activation=ReLU),
-    # NaiveBatchNormalization(),
-    # DenseLayer(1000, activation=ReLU),
-    # NaiveBatchNormalization(),
-    # DenseLayer(1000, activation=ReLU),
-    # NaiveBatchNormalization(),
-    # DenseLayer(1000, activation=ReLU),
-    # NaiveBatchNormalization(),
-    DenseLayer(10, activation=T.nnet.softmax)
+    # DenseLayer(100),
+    # NonLinearity(),
+
+    NaiveBatchNormalization(),
+    DenseLayer(10),
+    NonLinearity(activation=T.nnet.softmax)
 ], train_x.shape[1:])
 
-
-# h = 100
-# bn0 = NaiveBatchNormalization(len_in, eps=1e-2)
-# l0 = DenseLayer(len_in, h)
-# a0 = PReLU(h)
-# bn1 = NaiveBatchNormalization(h, eps=1e-2)
-# l1 = DenseLayer(h, h)
-# a1 = PReLU(h)
-# bn2 = NaiveBatchNormalization(h, eps=1e-2)
-# l2 = DenseLayer(h, h)
-# a2 = PReLU(h)
-# bn3 = NaiveBatchNormalization(h, eps=1e-2)
-# l3 = DenseLayer(h, h)
-# a3 = PReLU(h)
-# bn4 = NaiveBatchNormalization(h, eps=1e-2)
-# l4 = DenseLayer(h, h)
-# a4 = PReLU(h)
-# bn5 = NaiveBatchNormalization(h, eps=1e-2)
-# l5 = DenseLayer(h, h)
-# a5 = PReLU(h)
-# ls = DenseLayer(h, len_out, activation=T.nnet.softmax)
-# mlp = MLP([l0, a0, l1, a1, bn2, l2, a2, bn3, l3, a3, bn4, l4, a4, bn5, l5, a5, ls])
-# mlp = MLP([l0, l1, l2, l3, l4, l5, ls])
 
 # good_l0_W = l0.W.get_value(False)
 # good_l0_b = l0.b.get_value(False)
@@ -114,13 +87,16 @@ mlp = MLP([
 # l0.b.set_value(good_l0_b, False)
 
 
-learning_rate = 1e-3
-momentum = 0.9
-epoch_count = 300
-batch_size = 100
-
 ## TODO move to mlp.get_updates
 l2 = 0  # 1e-4
+learning_rate = 1e-2
+momentum = 0.9
+epoch_count = 10
+batch_size = 100
+
+print('lr=%f, batch=%d, l2=%f' % (learning_rate, batch_size, l2))
+
+
 
 X = T.tensor4('X4', dtype=theano.config.floatX)
 X.tag.test_value = valid_x[0:1]
