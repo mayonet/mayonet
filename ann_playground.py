@@ -16,7 +16,7 @@ theano.config.blas.ldflags = '-lblas -lgfortran'
 from ann import *
 
 
-np.random.seed(110)
+np.random.seed(1100)
 
 import os
 if not os.path.isfile('mnist.pkl.gz'):
@@ -73,13 +73,13 @@ mlp = MLP([
     # PReLU(),
     Flatten(),
     # NaiveBatchNormalization(),
-    DenseLayer(500, activation=ReLU),
+    DenseLayer(10000, activation=ReLU),
     # NaiveBatchNormalization(),
-    DenseLayer(500, activation=ReLU),
+    # DenseLayer(1000, activation=ReLU),
     # NaiveBatchNormalization(),
-    DenseLayer(500, activation=ReLU),
+    # DenseLayer(1000, activation=ReLU),
     # NaiveBatchNormalization(),
-    DenseLayer(500, activation=ReLU),
+    # DenseLayer(1000, activation=ReLU),
     # NaiveBatchNormalization(),
     DenseLayer(10, activation=T.nnet.softmax)
 ], train_x.shape[1:])
@@ -114,22 +114,27 @@ mlp = MLP([
 # l0.b.set_value(good_l0_b, False)
 
 
-learning_rate = 1e-2
+learning_rate = 1e-3
 momentum = 0.9
-epoch_count = 100
+epoch_count = 300
 batch_size = 100
+
+## TODO move to mlp.get_updates
+l2 = 0  # 1e-4
 
 X = T.tensor4('X4', dtype=theano.config.floatX)
 X.tag.test_value = valid_x[0:1]
 Y = T.matrix('Y', dtype=dtype_y)
 
 prob = mlp.forward(X)
-cost = mlp.nll(X, Y)
+cost = mlp.nll(X, Y, l2)
 
 misclass = theano.function([X, Y], T.sum(prob * Y > 0.5) * 1.0 / Y.shape[0])
+
 nll = theano.function([X, Y], cost)
 
 updates = mlp.get_updates(cost, momentum=momentum, learning_rate=learning_rate)
+
 train_model = theano.function(
     inputs=[X, Y],
     outputs=cost,

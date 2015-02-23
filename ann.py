@@ -55,15 +55,16 @@ class DenseLayer(ForwardPropogator):
     def setup_input(self, input_shape):
         assert len(input_shape) == 1, 'DenseLayer''s input must be 1 dimensional'
         self.in_dim = np.prod(input_shape)
-        self.W = theano.shared(np.cast[theano.config.floatX](np.random.uniform(-0.05, 0.05,
-                                                                               (self.in_dim, self.features_count))),
+
+        self.W = theano.shared(np.cast[theano.config.floatX](np.random.normal(0, np.sqrt(2./self.features_count),
+                                                                              (self.in_dim, self.features_count))),
                                borrow=True)
         self.b = theano.shared(np.zeros((1, self.features_count), dtype=theano.config.floatX), borrow=True,
                                broadcastable=(True, False))
         return self.features_count,
 
     def get_params(self):
-        return self.W, self.b
+        return (self.W, 1), (self.b, 0)
 
     def forward(self, X):
         return self.activation(T.dot(X, self.W) + self.b)
@@ -76,7 +77,7 @@ class PReLU(ForwardPropogator):
         return input_shape
 
     def get_params(self):
-        return self.alpha,
+        return (self.alpha, 0),
 
     def forward(self, X):
         return T.maximum(0, X) + self.alpha*T.minimum(0, X)
@@ -96,7 +97,7 @@ class NaiveConvBN(ForwardPropogator):
         return input_shape
 
     def get_params(self):
-        return self.gamma, self.beta
+        return (self.gamma, 1), (self.beta, 0)
 
     def forward(self, X):
         s = X.shape
@@ -119,7 +120,7 @@ class NaiveBatchNormalization(ForwardPropogator):
         return input_shape
 
     def get_params(self):
-        return self.gamma, self.beta
+        return (self.gamma, 1), (self.beta, 0)
 
     def forward(self, X):
         mean = T.mean(X, axis=0)
@@ -129,9 +130,10 @@ class NaiveBatchNormalization(ForwardPropogator):
 
 
 class ConvolutionalLayer(ForwardPropogator):
-    def __init__(self, window, features_count):
+    def __init__(self, window, features_count, istdev=None):
         self.features_count = features_count
         self.window = window
+        self.istdev = istdev
 
     def setup_input(self, input_shape):
         """input_shape=('c', 0, 1)"""
@@ -139,16 +141,26 @@ class ConvolutionalLayer(ForwardPropogator):
         img_size = input_shape[-1]
         channels = input_shape[0]
         self.filter_shape = (self.features_count, channels) + self.window
-        self.W = theano.shared(np.cast[theano.config.floatX](np.random.uniform(-0.05, 0.05, size=self.filter_shape)),
-                               borrow=True)
-        self.b = theano.shared(np.cast[theano.config.floatX](np.random.uniform(-0.05, 0.05,
-                                                                               size=(1, self.features_count, 1, 1))),
-                               borrow=True, broadcastable=(True, False, True, True))
+        #
+        # self.W = theano.shared(np.cast[theano.config.floatX](np.random.uniform(-0.05, 0.05, size=self.filter_shape)),
+        #                        borrow=True)
+        # self.b = theano.shared(np.cast[theano.config.floatX](np.random.uniform(-0.05, 0.05,
+        #                                                                        size=(1, self.features_count, 1, 1))),
+        #                        borrow=True, broadcastable=(True, False, True, True))
+        if self.istdev is None:
+            n = np.prod(self.window) * self.features_count
+            std = np.sqrt(2./n)
+        else:
+            std = self.istdev
+
+        self.W = theano.shared(np.cast[theano.config.floatX](np.random.normal(0, std, self.filter_shape)), borrow=True)
+        self.b = theano.shared(np.zeros((1, self.features_count, 1, 1), dtype=theano.config.floatX), borrow=True,
+                               broadcastable=(True, False, True, True))
         out_image_size = img_size - self.window[0] + 1
         return self.features_count, out_image_size, out_image_size
 
     def get_params(self):
-        return self.W, self.b
+        return (self.W, 1), (self.b, 0)
 
     def forward(self, X):
         return conv2d(X, self.W, filter_shape=self.filter_shape) + self.b
@@ -162,7 +174,6 @@ class MaxPool(ForwardPropogator):
         assert len(input_shape) == 3
         chans, rows, cols = input_shape
         return chans, (rows-1) // self.window[0] + 1, (cols-1) // self.window[1] + 1
-
 
     def get_params(self):
         return ()
@@ -208,11 +219,16 @@ class MLP(ForwardPropogator):
 
     def get_updates(self, cost, momentum=1.0, learning_rate=0.05):
         updates = []
-        for p in self.get_params():
+        for p, l2scale in self.get_params():
             delta_p = theano.shared(p.get_value()*0., broadcastable=p.broadcastable)
             updates.append((p, p - learning_rate*delta_p))
             updates.append((delta_p, momentum*delta_p + (1. - momentum)*T.grad(cost, p)))
         return updates
 
-    def nll(self, X, Y):
-        return -T.sum(T.log(self.forward(X)) * Y) / Y.shape[0]
+    def nll(self, X, Y, l2=0):
+        Y1 = self.forward(X)
+        Y1 = T.maximum(Y1, 1e-15)
+        L = -T.sum(T.log(Y1) * Y) / Y.shape[0]
+        for p, l2scale in self.get_params():
+            L += T.sum(l2scale * l2 * p * p / 2)
+        return L
