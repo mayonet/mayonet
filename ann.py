@@ -145,10 +145,11 @@ class NaiveBatchNormalization(ForwardPropogator):
 
 
 class ConvolutionalLayer(ForwardPropogator):
-    def __init__(self, window, features_count, istdev=None):
+    def __init__(self, window, features_count, istdev=None, train_bias=True):
         self.features_count = features_count
         self.window = window
         self.istdev = istdev
+        self.train_bias = train_bias
 
     def setup_input(self, input_shape):
         """input_shape=('c', 0, 1)"""
@@ -163,13 +164,19 @@ class ConvolutionalLayer(ForwardPropogator):
         else:
             std = self.istdev
         self.W = theano.shared(np.cast[theano.config.floatX](np.random.normal(0, std, self.filter_shape)), borrow=True)
-        self.b = theano.shared(np.zeros((1, self.features_count, 1, 1), dtype=theano.config.floatX), borrow=True,
-                               broadcastable=(True, False, True, True))
+        if self.train_bias:
+            self.b = theano.shared(np.zeros((1, self.features_count, 1, 1), dtype=theano.config.floatX), borrow=True,
+                                   broadcastable=(True, False, True, True))
+            self.params = (self.W, 1), (self.b, 0)
+        else:
+            self.params = (self.W, 1),
+            self.b = 0
+
         out_image_size = img_size - self.window[0] + 1
         return self.features_count, out_image_size, out_image_size
 
     def get_params(self):
-        return (self.W, 1), (self.b, 0)
+        return self.params
 
     def forward(self, X):
         return conv2d(X, self.W, filter_shape=self.filter_shape) + self.b

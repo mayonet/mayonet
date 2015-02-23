@@ -55,12 +55,12 @@ len_in = train_x.shape[1]
 len_out = train_y.shape[1]
 
 mlp = MLP([
-    ConvolutionalLayer((3, 3), 16),
+    ConvolutionalLayer((3, 3), 16, train_bias=False),
     NaiveConvBN(),
     MaxPool((3, 3)),
     NonLinearity(),
 
-    ConvolutionalLayer((3, 3), 32),
+    ConvolutionalLayer((3, 3), 32, train_bias=False),
     NaiveConvBN(),
     MaxPool((3, 3)),
     NonLinearity(),
