@@ -91,12 +91,10 @@ class NaiveConvBN(ForwardPropogator):
         channels = input_shape[0]
         self.gamma = theano.shared(np.ones((1, channels, 1, 1), dtype=theano.config.floatX), borrow=True,
                                    broadcastable=(True, False, True, True))
-        self.beta = theano.shared(np.ones((1, channels, 1, 1), dtype=theano.config.floatX), borrow=True,
-                                  broadcastable=(True, False, True, True))
         return input_shape
 
     def get_params(self):
-        return self.gamma, self.beta
+        return self.gamma,
 
     def forward(self, X):
         s = X.shape
@@ -104,7 +102,7 @@ class NaiveConvBN(ForwardPropogator):
         mean = T.mean(new_x, axis=1).reshape((1, s[1], 1, 1))
         std = T.std(new_x, axis=1).reshape((1, s[1], 1, 1))
         normalized_X = (X - mean) / (std*std + self.eps)
-        return normalized_X * self.gamma + self.beta
+        return normalized_X * self.gamma
         # return X * self.gamma + self.beta
 
 
