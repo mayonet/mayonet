@@ -48,6 +48,7 @@ class ForwardPropogator:
         raise NotImplementedError('setup_input not implemented')
 
     def self_updates(self):
+        return ()
 
 
 class DenseLayer(ForwardPropogator):
@@ -106,19 +107,18 @@ class NaiveConvBN(ForwardPropogator):
 
     def setup_input(self, input_shape):
         """Assumed input_shape to be ('c', 0, 1)"""
-        channels = input_shape[0]
-        self.gamma = theano.shared(np.ones((1, channels, 1, 1), dtype=theano.config.floatX), borrow=True,
-                                   broadcastable=(True, False, True, True))
-        self.beta = theano.shared(np.ones((1, channels, 1, 1), dtype=theano.config.floatX), borrow=True,
-                                  broadcastable=(True, False, True, True))
+        self.gamma = theano.shared(np.ones((1,) + input_shape, dtype=theano.config.floatX), borrow=True,
+                                   broadcastable=(True, False, False, False))
+        self.beta = theano.shared(np.zeros((1,) + input_shape, dtype=theano.config.floatX), borrow=True,
+                                  broadcastable=(True, False, False, False))
         return input_shape
 
     def get_params(self):
-        return (self.gamma, 1),
+        return (self.gamma, 1), (self.beta, 1)
 
     def forward(self, X):
-        mean = T.mean(X, axis=1, keepdims=True)
-        var = T.var(X, axis=1, keepdims=True)
+        mean = T.mean(X, axis=0)
+        var = T.var(X, axis=0)
         normalized_X = (X - mean) / (var + self.eps)
         return normalized_X * self.gamma + self.beta
         # return X * self.gamma + self.beta
