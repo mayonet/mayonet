@@ -55,12 +55,17 @@ len_in = train_x.shape[1]
 len_out = train_y.shape[1]
 
 mlp = MLP([
-    ConvolutionalLayer((3, 3), 16, train_bias=False),
+    ConvolutionalLayer((5, 5), 32, train_bias=False),
     NaiveConvBN(),
-    MaxPool((3, 3)),
+    MaxPool((2, 2)),
     NonLinearity(),
 
-    ConvolutionalLayer((3, 3), 32, train_bias=False),
+    ConvolutionalLayer((3, 3), 64, train_bias=False),
+    NaiveConvBN(),
+    # MaxPool((3, 3)),
+    NonLinearity(),
+
+    ConvolutionalLayer((3, 3), 64, train_bias=False),
     NaiveConvBN(),
     MaxPool((3, 3)),
     NonLinearity(),
@@ -68,12 +73,8 @@ mlp = MLP([
     Flatten(),
 
     NaiveBatchNormalization(),
-    DenseLayer(100),
+    DenseLayer(256),
     NonLinearity(),
-
-    # NaiveBatchNormalization(),
-    # DenseLayer(100),
-    # NonLinearity(),
 
     NaiveBatchNormalization(),
     DenseLayer(10),
@@ -89,9 +90,9 @@ mlp = MLP([
 
 ## TODO move to mlp.get_updates
 l2 = 0  # 1e-4
-learning_rate = 1e-2
+learning_rate = 1e-1
 momentum = 0.9
-epoch_count = 10
+epoch_count = 100
 batch_size = 100
 
 print('lr=%f, batch=%d, l2=%f' % (learning_rate, batch_size, l2))
@@ -131,15 +132,25 @@ for i in range(epoch_count):
         batch_nll = float(train_model(batch_x, batch_y))
         batch_nlls.append(batch_nll)
     train_nll = np.mean(batch_nlls)
-    test_nll = float(nll(valid_x, valid_y))
-    valid_misclass = misclass(valid_x, valid_y) * 100
+    test_nlls = []
+    valid_misclasses = []
+    for vb in range(valid_x.shape[0] // batch_size):
+        k = range(vb * batch_size, (vb + 1) * batch_size)
+        batch_x = valid_x[k]
+        batch_y = valid_y[k]
+        batch_nll = float(nll(batch_x, batch_y))
+        test_nlls.append(batch_nll)
+        batch_misclass = misclass(batch_x, batch_y) * 100
+        valid_misclasses.append(batch_misclass)
+    test_nll = np.mean(test_nlls)
+    valid_misclass = np.mean(valid_misclasses)
     epoch_time = time() - epoch_start_time
     print('%d\t%.4f\t%.4f\t%.2fs\t%.1f%%' % (i, train_nll, test_nll, epoch_time, valid_misclass))
 total_spent_time = time() - train_start
 print('Trained %d epochs in %.1f seconds (%.2f seconds in average)' % (epoch_count, total_spent_time,
                                                                        total_spent_time / epoch_count))
-mc = '%.1f%%' % (misclass(test_x, test_y)*100)
-print(mc)
+# mc = '%.1f%%' % (misclass(test_x, test_y)*100)
+# print(mc)
 
 
 
