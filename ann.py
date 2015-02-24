@@ -237,12 +237,22 @@ class MLP(ForwardPropogator):
     def get_params(self):
         return chain(*[L.get_params() for L in self.layers])
 
-    def get_updates(self, cost, momentum=1.0, learning_rate=0.05):
+    def sgd_updates(self, cost, momentum=1.0, learning_rate=0.05):
         updates = []
         for p, l2scale in self.get_params():
             delta_p = theano.shared(p.get_value()*0., broadcastable=p.broadcastable)
-            updates.append((p, p - learning_rate*delta_p))
-            updates.append((delta_p, momentum*delta_p + (1. - momentum)*T.grad(cost, p)))
+            updates.append((delta_p, momentum*delta_p - learning_rate*T.grad(cost, p)))
+            updates.append((p, p + delta_p))
+        for l in self.layers:
+            updates.extend(l.self_updates())
+        return updates
+
+    def nag_updates(self, cost, momentum=1.0, learning_rate=0.05):
+        updates = []
+        for p, l2scale in self.get_params():
+            vel = theano.shared(p.get_value()*0., broadcastable=p.broadcastable)
+            updates.append((vel, momentum*vel - learning_rate*T.grad(cost, p)))
+            updates.append((p, p + momentum*vel - learning_rate*T.grad(cost, p)))
         for l in self.layers:
             updates.extend(l.self_updates())
         return updates
