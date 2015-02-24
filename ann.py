@@ -131,7 +131,7 @@ class NaiveBatchNormalization(ForwardPropogator):
 
     def setup_input(self, input_shape):
         self.gamma = theano.shared(np.ones(input_shape, dtype=theano.config.floatX), borrow=True)
-        self.beta = theano.shared(np.ones(input_shape, dtype=theano.config.floatX), borrow=True)
+        self.beta = theano.shared(np.zeros(input_shape, dtype=theano.config.floatX), borrow=True)
         return input_shape
 
     def get_params(self):
@@ -142,6 +142,9 @@ class NaiveBatchNormalization(ForwardPropogator):
         std = T.std(X, axis=1, keepdims=True)
         normalized_X = (X - mean) / (std*std + self.eps)
         return normalized_X * self.gamma + self.beta
+
+    # def self_updates(self):
+    #     return self.updates
 
 
 class ConvolutionalLayer(ForwardPropogator):
@@ -158,6 +161,7 @@ class ConvolutionalLayer(ForwardPropogator):
         channels = input_shape[0]
         self.filter_shape = (self.features_count, channels) + self.window
 
+        out_image_size = img_size - self.window[0] + 1
         if self.istdev is None:
             n = np.prod(self.window) * self.features_count
             std = np.sqrt(2./n)
@@ -165,14 +169,14 @@ class ConvolutionalLayer(ForwardPropogator):
             std = self.istdev
         self.W = theano.shared(np.cast[theano.config.floatX](np.random.normal(0, std, self.filter_shape)), borrow=True)
         if self.train_bias:
-            self.b = theano.shared(np.zeros((1, self.features_count, 1, 1), dtype=theano.config.floatX), borrow=True,
-                                   broadcastable=(True, False, True, True))
+            self.b = theano.shared(np.zeros((1, self.features_count, out_image_size, out_image_size),
+                                            dtype=theano.config.floatX),
+                                   borrow=True, broadcastable=(True, False, False, False))
             self.params = (self.W, 1), (self.b, 0)
         else:
             self.params = (self.W, 1),
             self.b = 0
 
-        out_image_size = img_size - self.window[0] + 1
         return self.features_count, out_image_size, out_image_size
 
     def get_params(self):
@@ -239,6 +243,8 @@ class MLP(ForwardPropogator):
             delta_p = theano.shared(p.get_value()*0., broadcastable=p.broadcastable)
             updates.append((p, p - learning_rate*delta_p))
             updates.append((delta_p, momentum*delta_p + (1. - momentum)*T.grad(cost, p)))
+        for l in self.layers:
+            updates.extend(l.self_updates())
         return updates
 
     def nll(self, X, Y, l2=0):
