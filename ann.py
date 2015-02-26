@@ -6,9 +6,11 @@
 #################################
 
 from __future__ import print_function
+from collections import OrderedDict
 from itertools import chain
 import numpy as np
 import theano
+from theano.sandbox.cuda.dnn import dnn_pool
 import theano.tensor as T
 
 
@@ -31,6 +33,15 @@ def LeakyReLU(alpha):
     return ReLU
 
 
+##################################
+#  Helpers
+##################################
+
+def col_normalize(W, max_col_norm):
+    col_norms = T.sqrt(T.sum(T.sqr(W), axis=0))
+    desired_norms = T.clip(col_norms, 0, max_col_norm)
+    return W * desired_norms / (1e-7 + col_norms)
+
 ###################################
 #   Layers
 ###################################
@@ -47,14 +58,15 @@ class ForwardPropogator:
         """Returns output_dimension"""
         raise NotImplementedError('setup_input not implemented')
 
-    def self_updates(self, X):
-        return ()
+    def self_update(self, X, updates):
+        pass
 
 
 class DenseLayer(ForwardPropogator):
-    def __init__(self, features_count, activation=identity):
+    def __init__(self, features_count, max_col_norm=None, activation=identity):
         self.activation = activation
         self.features_count = features_count
+        self.max_col_norm = max_col_norm
 
     def setup_input(self, input_shape):
         assert len(input_shape) == 1, 'DenseLayer''s input must be 1 dimensional'
@@ -72,6 +84,11 @@ class DenseLayer(ForwardPropogator):
 
     def forward(self, X, train=False):
         return self.activation(T.dot(X, self.W) + self.b)
+
+    def self_update(self, X, updates):
+        if self.max_col_norm is not None:
+            W = updates[self.W]
+            updates[self.W] = col_normalize(W, self.max_col_norm)
 
 
 class PReLU(ForwardPropogator):
@@ -131,9 +148,9 @@ class BatchNormalization(ForwardPropogator):
         normalized_X = (X - mean) / T.sqrt(var + self.eps)
         return normalized_X * self.gamma + self.beta
 
-    def self_updates(self, X):
-        return ((self.MA, T.mean(X, axis=0, keepdims=True)*self.alpha_updates + self.MA*(1-self.alpha_updates)),
-                (self.MV, T.var(X, axis=0, keepdims=True)*self.alpha_updates + self.MV*(1-self.alpha_updates)))
+    def self_update(self, X, updates):
+        updates[self.MA] = T.mean(X, axis=0, keepdims=True)*self.alpha_updates + self.MA*(1-self.alpha_updates)
+        updates[self.MV] = T.var(X, axis=0, keepdims=True)*self.alpha_updates + self.MV*(1-self.alpha_updates)
 
 
 class ConvBNOnChannel(ForwardPropogator):
@@ -166,9 +183,9 @@ class ConvBNOnChannel(ForwardPropogator):
         normalized_X = (X - mean) / T.sqrt(var + self.eps)
         return normalized_X * self.gamma + self.beta
 
-    def self_updates(self, X):
-        return ((self.MA, T.mean(X, axis=(0, 1), keepdims=True)*self.alpha_updates + self.MA*(1-self.alpha_updates)),
-                (self.MV, T.var(X, axis=(0, 1), keepdims=True)*self.alpha_updates + self.MV*(1-self.alpha_updates)))
+    def self_update(self, X, updates):
+        updates[self.MA] = T.mean(X, axis=(0, 1), keepdims=True)*self.alpha_updates + self.MA*(1-self.alpha_updates)
+        updates[self.MV] = T.var(X, axis=(0, 1), keepdims=True)*self.alpha_updates + self.MV*(1-self.alpha_updates)
 
 
 class ConvBNOnPixels(ForwardPropogator):
@@ -201,9 +218,9 @@ class ConvBNOnPixels(ForwardPropogator):
         normalized_X = (X - mean) / T.sqrt(var + self.eps)
         return normalized_X * self.gamma + self.beta
 
-    def self_updates(self, X):
-        return ((self.MA, T.mean(X, axis=(0, 2, 3), keepdims=True)*self.alpha_updates + self.MA*(1-self.alpha_updates)),
-                (self.MV, T.var(X, axis=(0, 2, 3), keepdims=True)*self.alpha_updates + self.MV*(1-self.alpha_updates)))
+    def self_update(self, X, updates):
+        updates[self.MA] = T.mean(X, axis=(0, 2, 3), keepdims=True)*self.alpha_updates + self.MA*(1-self.alpha_updates)
+        updates[self.MV] = T.var(X, axis=(0, 2, 3), keepdims=True)*self.alpha_updates + self.MV*(1-self.alpha_updates)
 
 
 class ConvolutionalLayer(ForwardPropogator):
@@ -246,8 +263,9 @@ class ConvolutionalLayer(ForwardPropogator):
 
 
 class MaxPool(ForwardPropogator):
-    def __init__(self, window):
+    def __init__(self, window, stride=(1, 1)):
         self.window = window
+        self.stride = stride
 
     def setup_input(self, input_shape):
         assert len(input_shape) == 3
@@ -258,6 +276,7 @@ class MaxPool(ForwardPropogator):
         return ()
 
     def forward(self, X, train=False):
+        # return dnn_pool(X, ws=self.window, stride=self.stride)
         return max_pool_2d(X, ds=self.window)
 
 
@@ -358,24 +377,24 @@ class MLP(ForwardPropogator):
         return chain(*[L.get_params() for L in self.layers])
 
     def sgd_updates(self, cost, X, momentum=1.0, learning_rate=0.05):
-        updates = []
+        updates = OrderedDict()
         for p, l2scale in self.get_params():
             delta_p = theano.shared(p.get_value()*0., broadcastable=p.broadcastable)
-            updates.append((delta_p, momentum*delta_p - learning_rate*T.grad(cost, p)))
-            updates.append((p, p + delta_p))
+            updates[delta_p] = momentum*delta_p - learning_rate*T.grad(cost, p)
+            updates[p] = p + delta_p
         for l in self.layers:
-            updates.extend(l.self_updates(X))
-            X = l.forward_train(X)
+            l.self_update(X, updates)
+            X = l.forward(X, train=True)
         return updates
 
     def nag_updates(self, cost, X, momentum=1.0, learning_rate=0.05):
-        updates = []
+        updates = OrderedDict()
         for p, l2scale in self.get_params():
             vel = theano.shared(p.get_value()*0., broadcastable=p.broadcastable)
-            updates.append((vel, momentum*vel - learning_rate*T.grad(cost, p)))
-            updates.append((p, p + momentum*vel - learning_rate*T.grad(cost, p)))
+            updates[vel] = momentum*vel - learning_rate*T.grad(cost, p)
+            updates[p] = p + momentum*vel - learning_rate*T.grad(cost, p)
         for l in self.layers:
-            updates.extend(l.self_updates(X))
+            l.self_update(X, updates)
             X = l.forward(X, train=True)
         return updates
 

@@ -58,51 +58,47 @@ len_out = train_y.shape[1]
 mlp = MLP([
     # # GaussianDropout(0.5),
     # ConvolutionalLayer((3, 3), 16, train_bias=True),
-    # # ConvBN(),
-    # MaxPool((3, 3)),
-    # NonLinearity(),
-    #
-    # # GaussianDropout(0.5),
-    # ConvolutionalLayer((3, 3), 32, train_bias=False),
-    # ConvBNOnPixels(),
-    # MaxPool((3, 3)),
+    # BatchNormalization(),
+    # MaxPool((6, 6), (1, 1)),
     # NonLinearity(),
 
     Flatten(),
 
-    # # GaussianDropout(0.5),
-    # DenseLayer(128),
-    # BatchNormalization(),
+    # Dropout(0.8),
+    DenseLayer(200),
+    BatchNormalization(),
+    Dropout(0.5, 1),
+    Maxout(pieces=5),
     # NonLinearity(),
 
     # GaussianDropout(1),
-    DenseLayer(2048),
-    # BatchNormalization(),
-
-
-    Dropout(0.5),
-    NonLinearity(),
-    # Maxout(pieces=4),
+    # Dropout(0.5),
+    DenseLayer(200),
+    BatchNormalization(),
+    Dropout(0.5, 1),
+    Maxout(pieces=5),
+    # NonLinearity(),
 
     # GaussianDropout(1),
+    # Dropout(0.5),
     DenseLayer(10),
-    # BatchNormalization(),
+    BatchNormalization(),
     NonLinearity(activation=T.nnet.softmax)
 ], train_x.shape[1:])
 
 
 ## TODO move to mlp.get_updates
 l2 = 0  # 1e-5
-learning_rate = 1e-2
+learning_rate = 1e-1
 momentum = 0.99
-epoch_count = 500
+epoch_count = 1000
 batch_size = 100
 minibatch_count = train_x.shape[0] // batch_size
 learning_decay = 0.5 ** (1./(100 * minibatch_count))
 momentum_decay = 0.5 ** (1./(300 * minibatch_count))
 
 print('batch=%d, l2=%f,\nlr=%f, lr_decay=%f,\nmomentum=%f, momentum_decay=%f' %
-      (learning_rate, batch_size, l2, learning_decay, momentum, momentum_decay))
+      (batch_size, l2, learning_rate, learning_decay, momentum, momentum_decay))
 
 
 
@@ -122,8 +118,8 @@ nll = theano.function([X, Y], mlp.nll(X, Y, l2, train=False))
 lr = theano.shared(np.array(learning_rate, dtype=floatX))
 mm = theano.shared(np.array(momentum, dtype=floatX))
 updates = mlp.nag_updates(cost, X, momentum=mm, learning_rate=lr)
-updates.append([lr, lr * learning_decay])
-updates.append([mm, mm * momentum_decay])
+updates[lr] = lr * learning_decay
+updates[mm] = mm * momentum_decay
 
 train_model = theano.function(
     inputs=[X, Y],
