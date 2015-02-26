@@ -63,18 +63,20 @@ class ForwardPropogator:
 
 
 class DenseLayer(ForwardPropogator):
-    def __init__(self, features_count, max_col_norm=None, activation=identity):
+    def __init__(self, features_count, max_col_norm=None, activation=identity, leaky_relu_alpha=0):
         self.activation = activation
         self.features_count = features_count
         self.max_col_norm = max_col_norm
+        self.leaky_relu_alpha = leaky_relu_alpha
 
     def setup_input(self, input_shape):
         assert len(input_shape) == 1, 'DenseLayer''s input must be 1 dimensional'
         self.in_dim = np.prod(input_shape)
 
-        self.W = theano.shared(np.cast[theano.config.floatX](np.random.normal(0, np.sqrt(2./self.features_count),
-                                                                              (self.in_dim, self.features_count))),
-                               borrow=True)
+        self.W = theano.shared(np.cast[theano.config.floatX](
+            np.random.normal(0, np.sqrt(2./((1+self.leaky_relu_alpha**2)*self.features_count)),
+                             (self.in_dim, self.features_count))),
+            borrow=True)
         self.b = theano.shared(np.zeros((1, self.features_count), dtype=theano.config.floatX), borrow=True,
                                broadcastable=(True, False))
         return self.features_count,
@@ -92,8 +94,11 @@ class DenseLayer(ForwardPropogator):
 
 
 class PReLU(ForwardPropogator):
+    def __init__(self, initial_alpha=0.25):
+        self.initial_alpha = initial_alpha
+
     def setup_input(self, input_shape):
-        init_vals = np.zeros(input_shape, dtype=theano.config.floatX) + 0.25
+        init_vals = np.zeros(input_shape, dtype=theano.config.floatX) + self.initial_alpha
         self.alpha = theano.shared(init_vals, borrow=True)
         return input_shape
 
@@ -376,27 +381,23 @@ class MLP(ForwardPropogator):
     def get_params(self):
         return chain(*[L.get_params() for L in self.layers])
 
-    def sgd_updates(self, cost, X, momentum=1.0, learning_rate=0.05):
+    def updates(self, cost, X, momentum=1.0, learning_rate=0.05, method='momentum'):
         updates = OrderedDict()
         for p, l2scale in self.get_params():
-            delta_p = theano.shared(p.get_value()*0., broadcastable=p.broadcastable)
-            updates[delta_p] = momentum*delta_p - learning_rate*T.grad(cost, p)
-            updates[p] = p + delta_p
+            if method in ('momentum', 'nesterov'):
+                vel = theano.shared(p.get_value()*0., broadcastable=p.broadcastable)
+                updates[vel] = momentum*vel - learning_rate*T.grad(cost, p)
+                if method == 'nesterov':
+                    updates[p] = p + momentum*updates[vel] - learning_rate*T.grad(cost, p)
+                else:
+                    updates[p] = p + updates[vel]
         for l in self.layers:
             l.self_update(X, updates)
             X = l.forward(X, train=True)
         return updates
 
-    def nag_updates(self, cost, X, momentum=1.0, learning_rate=0.05):
-        updates = OrderedDict()
-        for p, l2scale in self.get_params():
-            vel = theano.shared(p.get_value()*0., broadcastable=p.broadcastable)
-            updates[vel] = momentum*vel - learning_rate*T.grad(cost, p)
-            updates[p] = p + momentum*vel - learning_rate*T.grad(cost, p)
-        for l in self.layers:
-            l.self_update(X, updates)
-            X = l.forward(X, train=True)
-        return updates
+    # def nag_updates(self, cost, X, momentum=1.0, learning_rate=0.05):
+    #     return self.sgd_updates(cost, X, momentum, learning_rate, method='nesterov')
 
     def nll(self, X, Y, l2=0, train=False):
         Y1 = self.forward(X, train)
