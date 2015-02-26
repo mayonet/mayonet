@@ -56,40 +56,44 @@ len_in = train_x.shape[1]
 len_out = train_y.shape[1]
 
 mlp = MLP([
-    # GaussianDropout(0.5),
-    ConvolutionalLayer((3, 3), 16, train_bias=True),
-    # ConvBN(),
-    MaxPool((3, 3)),
-    NonLinearity(),
-
-    # GaussianDropout(0.5),
-    ConvolutionalLayer((3, 3), 32, train_bias=False),
-    ConvBNOnPixels(),
-    MaxPool((3, 3)),
-    NonLinearity(),
+    # # GaussianDropout(0.5),
+    # ConvolutionalLayer((3, 3), 16, train_bias=True),
+    # # ConvBN(),
+    # MaxPool((3, 3)),
+    # NonLinearity(),
+    #
+    # # GaussianDropout(0.5),
+    # ConvolutionalLayer((3, 3), 32, train_bias=False),
+    # ConvBNOnPixels(),
+    # MaxPool((3, 3)),
+    # NonLinearity(),
 
     Flatten(),
 
-    # GaussianDropout(0.5),
-    DenseLayer(1024),
-    BatchNormalization(),
-    NonLinearity(),
+    # # GaussianDropout(0.5),
+    # DenseLayer(128),
+    # BatchNormalization(),
+    # NonLinearity(),
 
     # GaussianDropout(1),
-    DenseLayer(1024),
-    BatchNormalization(),
-    NonLinearity(),
+    DenseLayer(2048),
+    # BatchNormalization(),
 
-    GaussianDropout(1),
+
+    Dropout(0.5),
+    NonLinearity(),
+    # Maxout(pieces=4),
+
+    # GaussianDropout(1),
     DenseLayer(10),
-    BatchNormalization(),
+    # BatchNormalization(),
     NonLinearity(activation=T.nnet.softmax)
 ], train_x.shape[1:])
 
 
 ## TODO move to mlp.get_updates
 l2 = 0  # 1e-5
-learning_rate = 1e-1
+learning_rate = 1e-2
 momentum = 0.99
 epoch_count = 500
 batch_size = 100
