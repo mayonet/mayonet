@@ -351,15 +351,16 @@ class Maxout(ForwardPropogator):
         # self.pool_stride = self.pieces if pool_stride is None else pool_stride
 
     def setup_input(self, input_shape):
-        self.output_num = input_shape[0] // self.pieces
-        return (self.output_num,) + input_shape[1:]
+        self.input_shape = input_shape
+        self.output_num = self.input_shape[0] // self.pieces
+        return (self.output_num,) + self.input_shape[1:]
 
     def get_params(self):
         return ()
 
     def forward(self, X, train=False):
-        Xs = T.reshape(X, (X.shape[0], self.output_num, self.pieces))
-        return T.max(Xs, axis=2)
+        Xs = T.reshape(X, (X.shape[0], self.pieces, self.output_num) + self.input_shape[1:])
+        return T.max(Xs, axis=1)
 
 
 ####################################
