@@ -273,12 +273,15 @@ class Flatten(ForwardPropogator):
 
 
 class Dropout(ForwardPropogator):
-    def __init__(self, p):
+    def __init__(self, p, w=None):
         self.p = p
+        self.w = w
+        if w is None:
+            self.w = 1./p
 
     def forward(self, X, train=False):
         if train:
-            return X*self.mask.binomial(size=self.shape, n=1, p=self.p, dtype=theano.config.floatX)/self.p
+            return X*self.mask.binomial(size=self.shape, n=1, p=self.p, dtype=theano.config.floatX)*self.w
         else:
             return X
 
@@ -317,6 +320,7 @@ class Maxout(ForwardPropogator):
         # self.pool_stride = self.pieces if pool_stride is None else pool_stride
 
     def setup_input(self, input_shape):
+        assert (input_shape[0] % self.pieces) == 0, 'input_shape must be divisible by pieces count'
         self.output_num = input_shape[0] // self.pieces
         return (self.output_num,) + input_shape[1:]
 
