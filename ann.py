@@ -37,7 +37,7 @@ def LeakyReLU(alpha):
 
 
 class ForwardPropogator:
-    def forward(self, X):
+    def forward(self, X, train=False):
         raise NotImplementedError('forward is not implemented')
 
     def get_params(self):
@@ -47,7 +47,7 @@ class ForwardPropogator:
         """Returns output_dimension"""
         raise NotImplementedError('setup_input not implemented')
 
-    def self_updates(self):
+    def self_updates(self, X):
         return ()
 
 
@@ -70,7 +70,7 @@ class DenseLayer(ForwardPropogator):
     def get_params(self):
         return (self.W, 1), (self.b, 0)
 
-    def forward(self, X):
+    def forward(self, X, train=False):
         return self.activation(T.dot(X, self.W) + self.b)
 
 
@@ -83,7 +83,7 @@ class PReLU(ForwardPropogator):
     def get_params(self):
         return (self.alpha, 0),
 
-    def forward(self, X):
+    def forward(self, X, train=False):
         return T.maximum(0, X) + self.alpha*T.minimum(0, X)
 
 
@@ -97,54 +97,147 @@ class NonLinearity(ForwardPropogator):
     def get_params(self):
         return ()
 
-    def forward(self, X):
+    def forward(self, X, train=False):
         return self.activation(X)
 
 
-class NaiveConvBN(ForwardPropogator):
-    def __init__(self, eps=1e-12):
+class ConvBN(ForwardPropogator):
+    def __init__(self, eps=1e-12, alpha=0.9, alpha_updates=0.1):
         self.eps = eps
+        self.alpha = alpha
+        self.alpha_updates = alpha_updates
 
     def setup_input(self, input_shape):
         """Assumed input_shape to be ('c', 0, 1)"""
-        self.gamma = theano.shared(np.ones((1,) + input_shape, dtype=theano.config.floatX), borrow=True,
-                                   broadcastable=(True, False, False, False))
-        self.beta = theano.shared(np.zeros((1,) + input_shape, dtype=theano.config.floatX), borrow=True,
-                                  broadcastable=(True, False, False, False))
-        return input_shape
-
-    def get_params(self):
-        return (self.gamma, 1), (self.beta, 1)
-
-    def forward(self, X):
-        mean = T.mean(X, axis=0)
-        var = T.var(X, axis=0)
-        normalized_X = (X - mean) / (var + self.eps)
-        return normalized_X * self.gamma + self.beta
-        # return X * self.gamma + self.beta
-
-
-class NaiveBatchNormalization(ForwardPropogator):
-    ## TODO Make it not naive
-    def __init__(self, eps=1e-12):
-        self.eps = eps
-
-    def setup_input(self, input_shape):
-        self.gamma = theano.shared(np.ones(input_shape, dtype=theano.config.floatX), borrow=True)
-        self.beta = theano.shared(np.zeros(input_shape, dtype=theano.config.floatX), borrow=True)
+        self.gamma = theano.shared(np.ones((1,) + input_shape, dtype=theano.config.floatX),
+                                   borrow=True, broadcastable=(True, False, False, False))
+        self.beta = theano.shared(np.zeros((1,) + input_shape, dtype=theano.config.floatX),
+                                  borrow=True, broadcastable=(True, False, False, False))
+        self.MA = theano.shared(np.zeros((1, ) + input_shape, dtype=theano.config.floatX),
+                                borrow=True, broadcastable=(True, False, False, False))
+        self.MV = theano.shared(np.ones((1, ) + input_shape, dtype=theano.config.floatX),
+                                borrow=True, broadcastable=(True, False, False, False))
         return input_shape
 
     def get_params(self):
         return (self.gamma, 1), (self.beta, 0)
 
-    def forward(self, X):
-        mean = T.mean(X, axis=1, keepdims=True)
-        std = T.std(X, axis=1, keepdims=True)
-        normalized_X = (X - mean) / (std*std + self.eps)
+    def forward(self, X, train=False):
+        mean = self.MA
+        var = self.MV
+        if train:
+            mean = T.mean(X, axis=(0, 1), keepdims=True)*self.alpha + mean*(1-self.alpha)
+            var = T.var(X, axis=(0, 1), keepdims=True)*self.alpha + var*(1-self.alpha)
+        normalized_X = (X - mean) / T.sqrt(var + self.eps)
         return normalized_X * self.gamma + self.beta
 
-    # def self_updates(self):
-    #     return self.updates
+    def self_updates(self, X):
+        return ((self.MA, T.mean(X, axis=0, keepdims=True)*self.alpha_updates + self.MA*(1-self.alpha_updates)),
+                (self.MV, T.var(X, axis=0, keepdims=True)*self.alpha_updates + self.MV*(1-self.alpha_updates)))
+
+
+class ConvBNOnChannel(ForwardPropogator):
+    def __init__(self, eps=1e-12, alpha=0.9, alpha_updates=0.1):
+        self.eps = eps
+        self.alpha = alpha
+        self.alpha_updates = alpha_updates
+
+    def setup_input(self, input_shape):
+        """Assumed input_shape to be ('c', 0, 1)"""
+        self.gamma = theano.shared(np.ones((1,) + input_shape, dtype=theano.config.floatX),
+                                   borrow=True, broadcastable=(True, False, False, False))
+        self.beta = theano.shared(np.zeros((1,) + input_shape, dtype=theano.config.floatX),
+                                  borrow=True, broadcastable=(True, False, False, False))
+        self.MA = theano.shared(np.zeros((1, 1) + input_shape[1:], dtype=theano.config.floatX),
+                                borrow=True, broadcastable=(True, True, False, False))
+        self.MV = theano.shared(np.ones((1, 1) + input_shape[1:], dtype=theano.config.floatX),
+                                borrow=True, broadcastable=(True, True, False, False))
+        return input_shape
+
+    def get_params(self):
+        return (self.gamma, 1), (self.beta, 0)
+
+    def forward(self, X, train=False):
+        mean = self.MA
+        var = self.MV
+        if train:
+            mean = T.mean(X, axis=(0, 1), keepdims=True)*self.alpha + mean*(1-self.alpha)
+            var = T.var(X, axis=(0, 1), keepdims=True)*self.alpha + var*(1-self.alpha)
+        normalized_X = (X - mean) / T.sqrt(var + self.eps)
+        return normalized_X * self.gamma + self.beta
+
+    def self_updates(self, X):
+        return ((self.MA, T.mean(X, axis=(0, 1), keepdims=True)*self.alpha_updates + self.MA*(1-self.alpha_updates)),
+                (self.MV, T.var(X, axis=(0, 1), keepdims=True)*self.alpha_updates + self.MV*(1-self.alpha_updates)))
+
+
+class ConvBNOnPixels(ForwardPropogator):
+    def __init__(self, eps=1e-12, alpha=0.9, alpha_updates=0.1):
+        self.eps = eps
+        self.alpha = alpha
+        self.alpha_updates = alpha_updates
+
+    def setup_input(self, input_shape):
+        """Assumed input_shape to be ('c', 0, 1)"""
+        self.gamma = theano.shared(np.ones((1,) + input_shape, dtype=theano.config.floatX),
+                                   borrow=True, broadcastable=(True, False, False, False))
+        self.beta = theano.shared(np.zeros((1,) + input_shape, dtype=theano.config.floatX),
+                                  borrow=True, broadcastable=(True, False, False, False))
+        self.MA = theano.shared(np.zeros((1, input_shape[0], 1, 1), dtype=theano.config.floatX),
+                                borrow=True, broadcastable=(True, False, True, True))
+        self.MV = theano.shared(np.ones((1, input_shape[0], 1, 1), dtype=theano.config.floatX),
+                                borrow=True, broadcastable=(True, False, True, True))
+        return input_shape
+
+    def get_params(self):
+        return (self.gamma, 1), (self.beta, 0)
+
+    def forward(self, X, train=False):
+        mean = self.MA
+        var = self.MV
+        if train:
+            mean = T.mean(X, axis=(0, 2, 3), keepdims=True)*self.alpha + mean*(1-self.alpha)
+            var = T.var(X, axis=(0, 2, 3), keepdims=True)*self.alpha + var*(1-self.alpha)
+        normalized_X = (X - mean) / T.sqrt(var + self.eps)
+        return normalized_X * self.gamma + self.beta
+
+    def self_updates(self, X):
+        return ((self.MA, T.mean(X, axis=(0, 2, 3), keepdims=True)*self.alpha_updates + self.MA*(1-self.alpha_updates)),
+                (self.MV, T.var(X, axis=(0, 2, 3), keepdims=True)*self.alpha_updates + self.MV*(1-self.alpha_updates)))
+
+
+class BatchNormalization(ForwardPropogator):
+    def __init__(self, eps=1e-12, alpha=0.9, alpha_updates=0.1):
+        self.eps = eps
+        self.alpha = alpha
+        self.alpha_updates = alpha_updates
+
+    def setup_input(self, input_shape):
+        self.beta = theano.shared(np.zeros((1, ) + input_shape, dtype=theano.config.floatX),
+                                  borrow=True, broadcastable=(True, False))
+        self.gamma = theano.shared(np.ones((1, ) + input_shape, dtype=theano.config.floatX),
+                                   borrow=True, broadcastable=(True, False))
+        self.MA = theano.shared(np.zeros((1, ) + input_shape, dtype=theano.config.floatX),
+                                borrow=True, broadcastable=(True, False))
+        self.MV = theano.shared(np.ones((1, ) + input_shape, dtype=theano.config.floatX),
+                                borrow=True, broadcastable=(True, False))
+        return input_shape
+
+    def get_params(self):
+        return (self.gamma, 1), (self.beta, 0)
+
+    def forward(self, X, train=False):
+        mean = self.MA
+        var = self.MV
+        if train:
+            mean = T.mean(X, axis=0, keepdims=True)*self.alpha + mean*(1-self.alpha)
+            var = T.var(X, axis=0, keepdims=True)*self.alpha + var*(1-self.alpha)
+        normalized_X = (X - mean) / T.sqrt(var + self.eps)
+        return normalized_X * self.gamma + self.beta
+
+    def self_updates(self, X):
+        return ((self.MA, T.mean(X, axis=0, keepdims=True)*self.alpha_updates + self.MA*(1-self.alpha_updates)),
+                (self.MV, T.var(X, axis=0, keepdims=True)*self.alpha_updates + self.MV*(1-self.alpha_updates)))
 
 
 class ConvolutionalLayer(ForwardPropogator):
@@ -182,7 +275,7 @@ class ConvolutionalLayer(ForwardPropogator):
     def get_params(self):
         return self.params
 
-    def forward(self, X):
+    def forward(self, X, train=False):
         return conv2d(X, self.W, filter_shape=self.filter_shape) + self.b
 
 
@@ -198,12 +291,12 @@ class MaxPool(ForwardPropogator):
     def get_params(self):
         return ()
 
-    def forward(self, X):
+    def forward(self, X, train=False):
         return max_pool_2d(X, ds=self.window)
 
 
 class Flatten(ForwardPropogator):
-    def forward(self, X):
+    def forward(self, X, train=False):
         return T.flatten(X, outdim=2)
 
     def setup_input(self, input_shape):
@@ -211,6 +304,45 @@ class Flatten(ForwardPropogator):
 
     def get_params(self):
         return ()
+
+
+class Dropout(ForwardPropogator):
+    def __init__(self, p):
+        self.p = p
+
+    def forward(self, X, train=False):
+        if train:
+            return X*self.mask.binomial(size=self.shape, n=1, p=self.p, dtype=theano.config.floatX)/self.p
+        else:
+            return X
+
+    def setup_input(self, input_shape):
+        self.shape = input_shape
+        self.mask = T.shared_randomstreams.RandomStreams()
+        return input_shape
+
+    def get_params(self):
+        return ()
+
+
+class GaussianDropout(ForwardPropogator):
+    def __init__(self, std):
+        self.std = std
+
+    def forward(self, X, train=False):
+        if train:
+            return X*self.mask.normal(size=self.shape, avg=1, std=self.std, dtype=theano.config.floatX)
+        else:
+            return X
+
+    def setup_input(self, input_shape):
+        self.shape = input_shape
+        self.mask = T.shared_randomstreams.RandomStreams()
+        return input_shape
+
+    def get_params(self):
+        return ()
+
 
 
 ####################################
@@ -229,36 +361,38 @@ class MLP(ForwardPropogator):
             s = outp
         self.output_shape = s
 
-    def forward(self, X):
+    def forward(self, X, train=False):
         for l in self.layers:
-            X = l.forward(X)
+            X = l.forward(X, train)
         return X
 
     def get_params(self):
         return chain(*[L.get_params() for L in self.layers])
 
-    def sgd_updates(self, cost, momentum=1.0, learning_rate=0.05):
+    def sgd_updates(self, cost, X, momentum=1.0, learning_rate=0.05):
         updates = []
         for p, l2scale in self.get_params():
             delta_p = theano.shared(p.get_value()*0., broadcastable=p.broadcastable)
             updates.append((delta_p, momentum*delta_p - learning_rate*T.grad(cost, p)))
             updates.append((p, p + delta_p))
         for l in self.layers:
-            updates.extend(l.self_updates())
+            updates.extend(l.self_updates(X))
+            X = l.forward_train(X)
         return updates
 
-    def nag_updates(self, cost, momentum=1.0, learning_rate=0.05):
+    def nag_updates(self, cost, X, momentum=1.0, learning_rate=0.05):
         updates = []
         for p, l2scale in self.get_params():
             vel = theano.shared(p.get_value()*0., broadcastable=p.broadcastable)
             updates.append((vel, momentum*vel - learning_rate*T.grad(cost, p)))
             updates.append((p, p + momentum*vel - learning_rate*T.grad(cost, p)))
         for l in self.layers:
-            updates.extend(l.self_updates())
+            updates.extend(l.self_updates(X))
+            X = l.forward(X, train=True)
         return updates
 
-    def nll(self, X, Y, l2=0):
-        Y1 = self.forward(X)
+    def nll(self, X, Y, l2=0, train=False):
+        Y1 = self.forward(X, train)
         Y1 = T.maximum(Y1, 1e-15)
         L = -T.sum(T.log(Y1) * Y) / Y.shape[0]
         for p, l2scale in self.get_params():

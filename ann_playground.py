@@ -9,7 +9,7 @@ from pylearn2.format.target_format import convert_to_one_hot
 import theano
 import theano.tensor as T
 # theano.config.compute_test_value = 'warn'
-# theano.config.exception_verbosity = 'high'
+theano.config.exception_verbosity = 'high'
 theano.config.floatX = 'float32'
 theano.config.blas.ldflags = '-lblas -lgfortran'
 floatX = theano.config.floatX
@@ -56,42 +56,49 @@ len_in = train_x.shape[1]
 len_out = train_y.shape[1]
 
 mlp = MLP([
-    ConvolutionalLayer((5, 5), 64, train_bias=True),
-    # NaiveConvBN(),
+    # GaussianDropout(0.5),
+    ConvolutionalLayer((3, 3), 16, train_bias=True),
+    # ConvBN(),
     MaxPool((3, 3)),
     NonLinearity(),
 
-    ConvolutionalLayer((3, 3), 128, train_bias=True),
-    # NaiveConvBN(),
+    # GaussianDropout(0.5),
+    ConvolutionalLayer((3, 3), 32, train_bias=False),
+    ConvBNOnPixels(),
     MaxPool((3, 3)),
     NonLinearity(),
 
     Flatten(),
 
-    # NaiveBatchNormalization(),
-    DenseLayer(512),
+    # GaussianDropout(0.5),
+    DenseLayer(1024),
+    BatchNormalization(),
     NonLinearity(),
 
-    # NaiveBatchNormalization(),
-    DenseLayer(512),
+    # GaussianDropout(1),
+    DenseLayer(1024),
+    BatchNormalization(),
     NonLinearity(),
 
-    # NaiveBatchNormalization(),
+    GaussianDropout(1),
     DenseLayer(10),
+    BatchNormalization(),
     NonLinearity(activation=T.nnet.softmax)
 ], train_x.shape[1:])
 
 
 ## TODO move to mlp.get_updates
-l2 = 0  # 5e-5
-learning_rate = 2e-3
-momentum = 0.995
+l2 = 0  # 1e-5
+learning_rate = 1e-1
+momentum = 0.99
 epoch_count = 500
 batch_size = 100
 minibatch_count = train_x.shape[0] // batch_size
 learning_decay = 0.5 ** (1./(100 * minibatch_count))
+momentum_decay = 0.5 ** (1./(300 * minibatch_count))
 
-print('lr=%f, batch=%d, l2=%f, lr_decay=%f, momentum=%f' % (learning_rate, batch_size, l2, learning_decay, momentum))
+print('batch=%d, l2=%f,\nlr=%f, lr_decay=%f,\nmomentum=%f, momentum_decay=%f' %
+      (learning_rate, batch_size, l2, learning_decay, momentum, momentum_decay))
 
 
 
@@ -100,17 +107,19 @@ X.tag.test_value = valid_x[0:1]
 Y = T.matrix('Y', dtype=dtype_y)
 
 prob = mlp.forward(X)
-cost = mlp.nll(X, Y, l2)
+cost = mlp.nll(X, Y, l2, train=True)
 
 misclass = theano.function([X, Y], T.sum(prob * Y > 0.5) * 1.0 / Y.shape[0])
 
-nll = theano.function([X, Y], cost)
+nll = theano.function([X, Y], mlp.nll(X, Y, l2, train=False))
 
 
 
 lr = theano.shared(np.array(learning_rate, dtype=floatX))
-updates = mlp.nag_updates(cost, momentum=momentum, learning_rate=lr)
+mm = theano.shared(np.array(momentum, dtype=floatX))
+updates = mlp.nag_updates(cost, X, momentum=mm, learning_rate=lr)
 updates.append([lr, lr * learning_decay])
+updates.append([mm, mm * momentum_decay])
 
 train_model = theano.function(
     inputs=[X, Y],
@@ -145,7 +154,8 @@ for i in range(epoch_count):
     test_nll = np.mean(test_nlls)
     valid_misclass = np.mean(valid_misclasses)
     epoch_time = time() - epoch_start_time
-    print('%d\t%.5f\t%.5f\t%.1fs\t%.2f%%\t%f' % (i, train_nll, test_nll, epoch_time, valid_misclass, lr.get_value()))
+    print('%d\t%.5f\t%.5f\t%.1fs\t%.2f%%\t%f\t%f' % (i, train_nll, test_nll, epoch_time, valid_misclass,
+                                                     lr.get_value(), mm.get_value()))
 total_spent_time = time() - train_start
 print('Trained %d epochs in %.1f seconds (%.2f seconds in average)' % (epoch_count, total_spent_time,
                                                                        total_spent_time / epoch_count))
