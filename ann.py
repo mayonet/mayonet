@@ -101,22 +101,22 @@ class NonLinearity(ForwardPropogator):
         return self.activation(X)
 
 
-class ConvBN(ForwardPropogator):
+class BatchNormalization(ForwardPropogator):
     def __init__(self, eps=1e-12, alpha=0.9, alpha_updates=0.1):
         self.eps = eps
         self.alpha = alpha
         self.alpha_updates = alpha_updates
 
     def setup_input(self, input_shape):
-        """Assumed input_shape to be ('c', 0, 1)"""
-        self.gamma = theano.shared(np.ones((1,) + input_shape, dtype=theano.config.floatX),
-                                   borrow=True, broadcastable=(True, False, False, False))
-        self.beta = theano.shared(np.zeros((1,) + input_shape, dtype=theano.config.floatX),
-                                  borrow=True, broadcastable=(True, False, False, False))
+        bc = (True, ) + (False, ) * len(input_shape)
+        self.beta = theano.shared(np.zeros((1, ) + input_shape, dtype=theano.config.floatX),
+                                  borrow=True, broadcastable=bc)
+        self.gamma = theano.shared(np.ones((1, ) + input_shape, dtype=theano.config.floatX),
+                                   borrow=True, broadcastable=bc)
         self.MA = theano.shared(np.zeros((1, ) + input_shape, dtype=theano.config.floatX),
-                                borrow=True, broadcastable=(True, False, False, False))
+                                borrow=True, broadcastable=bc)
         self.MV = theano.shared(np.ones((1, ) + input_shape, dtype=theano.config.floatX),
-                                borrow=True, broadcastable=(True, False, False, False))
+                                borrow=True, broadcastable=bc)
         return input_shape
 
     def get_params(self):
@@ -126,8 +126,8 @@ class ConvBN(ForwardPropogator):
         mean = self.MA
         var = self.MV
         if train:
-            mean = T.mean(X, axis=(0, 1), keepdims=True)*self.alpha + mean*(1-self.alpha)
-            var = T.var(X, axis=(0, 1), keepdims=True)*self.alpha + var*(1-self.alpha)
+            mean = T.mean(X, axis=0, keepdims=True)*self.alpha + mean*(1-self.alpha)
+            var = T.var(X, axis=0, keepdims=True)*self.alpha + var*(1-self.alpha)
         normalized_X = (X - mean) / T.sqrt(var + self.eps)
         return normalized_X * self.gamma + self.beta
 
@@ -204,40 +204,6 @@ class ConvBNOnPixels(ForwardPropogator):
     def self_updates(self, X):
         return ((self.MA, T.mean(X, axis=(0, 2, 3), keepdims=True)*self.alpha_updates + self.MA*(1-self.alpha_updates)),
                 (self.MV, T.var(X, axis=(0, 2, 3), keepdims=True)*self.alpha_updates + self.MV*(1-self.alpha_updates)))
-
-
-class BatchNormalization(ForwardPropogator):
-    def __init__(self, eps=1e-12, alpha=0.9, alpha_updates=0.1):
-        self.eps = eps
-        self.alpha = alpha
-        self.alpha_updates = alpha_updates
-
-    def setup_input(self, input_shape):
-        self.beta = theano.shared(np.zeros((1, ) + input_shape, dtype=theano.config.floatX),
-                                  borrow=True, broadcastable=(True, False))
-        self.gamma = theano.shared(np.ones((1, ) + input_shape, dtype=theano.config.floatX),
-                                   borrow=True, broadcastable=(True, False))
-        self.MA = theano.shared(np.zeros((1, ) + input_shape, dtype=theano.config.floatX),
-                                borrow=True, broadcastable=(True, False))
-        self.MV = theano.shared(np.ones((1, ) + input_shape, dtype=theano.config.floatX),
-                                borrow=True, broadcastable=(True, False))
-        return input_shape
-
-    def get_params(self):
-        return (self.gamma, 1), (self.beta, 0)
-
-    def forward(self, X, train=False):
-        mean = self.MA
-        var = self.MV
-        if train:
-            mean = T.mean(X, axis=0, keepdims=True)*self.alpha + mean*(1-self.alpha)
-            var = T.var(X, axis=0, keepdims=True)*self.alpha + var*(1-self.alpha)
-        normalized_X = (X - mean) / T.sqrt(var + self.eps)
-        return normalized_X * self.gamma + self.beta
-
-    def self_updates(self, X):
-        return ((self.MA, T.mean(X, axis=0, keepdims=True)*self.alpha_updates + self.MA*(1-self.alpha_updates)),
-                (self.MV, T.var(X, axis=0, keepdims=True)*self.alpha_updates + self.MV*(1-self.alpha_updates)))
 
 
 class ConvolutionalLayer(ForwardPropogator):
