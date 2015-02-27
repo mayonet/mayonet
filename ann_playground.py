@@ -58,11 +58,11 @@ len_out = train_y.shape[1]
 prelu_alpha = 0.25
 
 mlp = MLP([
-    # GaussianDropout(0.5),
-    ConvolutionalLayer((3, 3), 16, train_bias=True),
-    # BatchNormalization(),
-    MaxPool((6, 6), (3, 3)),
-    NonLinearity(),
+    # # GaussianDropout(0.5),
+    # ConvolutionalLayer((3, 3), 16, train_bias=True),
+    # # BatchNormalization(),
+    # MaxPool((6, 6), (3, 3)),
+    # NonLinearity(),
 
     Flatten(),
 
@@ -95,8 +95,10 @@ minibatch_count = train_x.shape[0] // batch_size
 learning_decay = 1  # 0.5 ** (1./(80 * minibatch_count))
 momentum_decay = 0.5 ** (1./(300 * minibatch_count))
 
-print('batch=%d, l2=%f,\nlr=%f, lr_decay=%f,\nmomentum=%f, momentum_decay=%f' %
-      (batch_size, l2, learning_rate, learning_decay, momentum, momentum_decay))
+method = 'adadelta'
+
+print('batch=%d, l2=%f, method=%s\nlr=%f, lr_decay=%f,\nmomentum=%f, momentum_decay=%f' %
+      (batch_size, l2, method, learning_rate, learning_decay, momentum, momentum_decay))
 
 
 
@@ -115,7 +117,7 @@ nll = theano.function([X, Y], mlp.nll(X, Y, l2, train=False))
 
 lr = theano.shared(np.array(learning_rate, dtype=floatX))
 mm = theano.shared(np.array(momentum, dtype=floatX))
-updates = mlp.updates(cost, X, momentum=mm, learning_rate=lr, method='rmsprop')
+updates = mlp.updates(cost, X, momentum=mm, learning_rate=lr, method=method)
 updates[lr] = lr * learning_decay
 updates[mm] = mm * momentum_decay
 

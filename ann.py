@@ -388,19 +388,37 @@ class MLP(ForwardPropogator):
             grad = T.grad(cost, p)
             if method == 'sgd':
                 updates[p] = p - learning_rate*grad
-            if method == 'rmsprop':
+            elif method == 'adagrad':
+                grad_acc = theano.shared(np.zeros(p.get_value().shape, dtype=theano.config.floatX),
+                                            broadcastable=p.broadcastable)
+                updates[grad_acc] = grad_acc + grad**2
+                lr_p = T.clip(learning_rate/T.sqrt(updates[grad_acc] + 1e-7), 1e-6, 50)
+                updates[p] = p - lr_p*grad
+            elif method == 'adadelta':
+                grad_acc = theano.shared(np.zeros(p.get_value().shape, dtype=theano.config.floatX),
+                                            broadcastable=p.broadcastable)
+                weight_acc = theano.shared(np.zeros(p.get_value().shape, dtype=theano.config.floatX),
+                                            broadcastable=p.broadcastable)
+                updates[grad_acc] = 0.9*grad_acc + 0.1*(grad**2)
+                lr_p = learning_rate*T.sqrt(weight_acc + 1e-3)/T.sqrt(updates[grad_acc] + 1e-7)
+                delta_p = -lr_p*grad
+                updates[p] = p + delta_p
+                updates[weight_acc] = 0.9*weight_acc + 0.1*delta_p**2
+            elif method == 'rmsprop':
                 mean_square = theano.shared(np.zeros(p.get_value().shape, dtype=theano.config.floatX),
                                             broadcastable=p.broadcastable)
                 updates[mean_square] = 0.9*mean_square + 0.1*(grad**2)
                 lr_p = T.clip(learning_rate/T.sqrt(updates[mean_square] + 1e-7), 1e-6, 50)
                 updates[p] = p - lr_p*grad
-            if method in ('momentum', 'nesterov'):
+            elif method in ('momentum', 'nesterov'):
                 vel = theano.shared(p.get_value()*0., broadcastable=p.broadcastable)
                 updates[vel] = momentum*vel - learning_rate*grad
                 if method == 'nesterov':
                     updates[p] = p + momentum*updates[vel] - learning_rate*grad
                 else:
                     updates[p] = p + updates[vel]
+            else:
+                raise AssertionError('invalid method: %s' % method)
         for l in self.layers:
             l.self_update(X, updates)
             X = l.forward(X, train=True)
