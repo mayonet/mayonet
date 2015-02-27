@@ -275,14 +275,15 @@ class MaxPool(ForwardPropogator):
     def setup_input(self, input_shape):
         assert len(input_shape) == 3
         chans, rows, cols = input_shape
-        return chans, (rows-1) // self.window[0] + 1, (cols-1) // self.window[1] + 1
+        # return chans, (rows-1) // self.window[0] + 1, (cols-1) // self.window[1] + 1
+        return chans, (rows-self.window[0]) // self.stride[0] + 1, (cols-self.window[0]) // self.stride[0] + 1
 
     def get_params(self):
         return ()
 
     def forward(self, X, train=False):
-        # return dnn_pool(X, ws=self.window, stride=self.stride)
-        return max_pool_2d(X, ds=self.window)
+        return dnn_pool(X, ws=self.window, stride=self.stride)
+        # return max_pool_2d(X, ds=self.window)
 
 
 class Flatten(ForwardPropogator):
@@ -384,11 +385,20 @@ class MLP(ForwardPropogator):
     def updates(self, cost, X, momentum=1.0, learning_rate=0.05, method='momentum'):
         updates = OrderedDict()
         for p, l2scale in self.get_params():
+            grad = T.grad(cost, p)
+            if method == 'sgd':
+                updates[p] = p - learning_rate*grad
+            if method == 'rmsprop':
+                mean_square = theano.shared(np.zeros(p.get_value().shape, dtype=theano.config.floatX),
+                                            broadcastable=p.broadcastable)
+                updates[mean_square] = 0.9*mean_square + 0.1*(grad**2)
+                lr_p = T.clip(learning_rate/T.sqrt(updates[mean_square] + 1e-7), 1e-6, 50)
+                updates[p] = p - lr_p*grad
             if method in ('momentum', 'nesterov'):
                 vel = theano.shared(p.get_value()*0., broadcastable=p.broadcastable)
-                updates[vel] = momentum*vel - learning_rate*T.grad(cost, p)
+                updates[vel] = momentum*vel - learning_rate*grad
                 if method == 'nesterov':
-                    updates[p] = p + momentum*updates[vel] - learning_rate*T.grad(cost, p)
+                    updates[p] = p + momentum*updates[vel] - learning_rate*grad
                 else:
                     updates[p] = p + updates[vel]
         for l in self.layers:

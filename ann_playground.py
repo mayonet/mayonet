@@ -55,14 +55,14 @@ test_y = convert_to_one_hot(test_set[1], dtype=dtype_y)
 len_in = train_x.shape[1]
 len_out = train_y.shape[1]
 
-prelu_alpha=0.25
+prelu_alpha = 0.25
 
 mlp = MLP([
-    # # GaussianDropout(0.5),
-    # ConvolutionalLayer((3, 3), 16, train_bias=True),
+    # GaussianDropout(0.5),
+    ConvolutionalLayer((3, 3), 16, train_bias=True),
     # BatchNormalization(),
-    # MaxPool((6, 6), (1, 1)),
-    # NonLinearity(),
+    MaxPool((6, 6), (3, 3)),
+    NonLinearity(),
 
     Flatten(),
 
@@ -87,12 +87,12 @@ mlp = MLP([
 
 ## TODO move to mlp.get_updates
 l2 = 0  # 1e-5
-learning_rate = 0.097259
+learning_rate = 0.01
 momentum = 0.99
 epoch_count = 1000
 batch_size = 100
 minibatch_count = train_x.shape[0] // batch_size
-learning_decay = 0.5 ** (1./(200 * minibatch_count))
+learning_decay = 1  # 0.5 ** (1./(80 * minibatch_count))
 momentum_decay = 0.5 ** (1./(300 * minibatch_count))
 
 print('batch=%d, l2=%f,\nlr=%f, lr_decay=%f,\nmomentum=%f, momentum_decay=%f' %
@@ -115,7 +115,7 @@ nll = theano.function([X, Y], mlp.nll(X, Y, l2, train=False))
 
 lr = theano.shared(np.array(learning_rate, dtype=floatX))
 mm = theano.shared(np.array(momentum, dtype=floatX))
-updates = mlp.updates(cost, X, momentum=mm, learning_rate=lr, method='nesterov')
+updates = mlp.updates(cost, X, momentum=mm, learning_rate=lr, method='rmsprop')
 updates[lr] = lr * learning_decay
 updates[mm] = mm * momentum_decay
 
