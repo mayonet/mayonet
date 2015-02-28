@@ -5,6 +5,7 @@ import math
 
 import numpy as np
 from pylearn2.format.target_format import convert_to_one_hot
+from spyderlib.utils.qthelpers import MacApplication
 
 import theano
 import theano.tensor as T
@@ -58,28 +59,47 @@ len_out = train_y.shape[1]
 prelu_alpha = 0.25
 
 mlp = MLP([
+    # ConvolutionalLayer((8, 8), 96, train_bias=True, pad=0, max_kernel_norm=0.9),
+    # BatchNormalization(),
+    # MaxPool((4, 4), (2, 2)),
+    # # NonLinearity(),
+    # Maxout(2),
+    #
     # # GaussianDropout(0.5),
-    # ConvolutionalLayer((3, 3), 16, train_bias=True),
-    # # BatchNormalization(),
-    # MaxPool((6, 6), (3, 3)),
-    # NonLinearity(),
+    #
+    # ConvolutionalLayer((8, 8), 96, train_bias=True, pad=3, max_kernel_norm=1.9365),
+    # BatchNormalization(),
+    # MaxPool((4, 4), (2, 2)),
+    # # NonLinearity(),
+    # Maxout(2),
+    #
+    # # GaussianDropout(1),
+    #
+    # ConvolutionalLayer((5, 5), 48, train_bias=True, pad=3, max_kernel_norm=1.9365),
+    # BatchNormalization(),
+    # MaxPool((2, 2), (2, 2)),
+    # # NonLinearity(),
+    # Maxout(2),
 
     Flatten(),
 
-    GaussianDropout(0.5),
-    DenseLayer(898, max_col_norm=4.378017, leaky_relu_alpha=prelu_alpha),
+    Dropout(p=0.8, w=1),
+    # GaussianDropout(0.5),
+    DenseLayer(1200, max_col_norm=1.9365),
     BatchNormalization(),
     # NonLinearity(),
-    PReLU(prelu_alpha),
+    # PReLU(prelu_alpha),
+    Maxout(pieces=5),
 
-    GaussianDropout(1),
-    DenseLayer(1532, max_col_norm=2.970242, leaky_relu_alpha=prelu_alpha),
+    # GaussianDropout(1),
+    DenseLayer(1200, max_col_norm=1.9365),
     BatchNormalization(),
     # NonLinearity(),
-    PReLU(prelu_alpha),
+    # PReLU(prelu_alpha),
+    Maxout(pieces=5),
 
-    GaussianDropout(1),
-    DenseLayer(10, max_col_norm=4.626974),
+    # GaussianDropout(1),
+    DenseLayer(10, max_col_norm=1.9365),
     BatchNormalization(),
     NonLinearity(activation=T.nnet.softmax)
 ], train_x.shape[1:])
@@ -87,15 +107,15 @@ mlp = MLP([
 
 ## TODO move to mlp.get_updates
 l2 = 0  # 1e-5
-learning_rate = 0.01
+learning_rate = 8e-2
 momentum = 0.99
 epoch_count = 1000
 batch_size = 100
 minibatch_count = train_x.shape[0] // batch_size
-learning_decay = 1  # 0.5 ** (1./(80 * minibatch_count))
-momentum_decay = 0.5 ** (1./(300 * minibatch_count))
+learning_decay = 1  # 0.5 ** (1./(800 * minibatch_count))
+momentum_decay = 1  # 0.5 ** (1./(300 * minibatch_count))
 
-method = 'adadelta'
+method = 'adadelta+nesterov'
 
 print('batch=%d, l2=%f, method=%s\nlr=%f, lr_decay=%f,\nmomentum=%f, momentum_decay=%f' %
       (batch_size, l2, method, learning_rate, learning_decay, momentum, momentum_decay))

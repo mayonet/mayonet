@@ -42,6 +42,11 @@ def col_normalize(W, max_col_norm):
     desired_norms = T.clip(col_norms, 0, max_col_norm)
     return W * desired_norms / (1e-7 + col_norms)
 
+def kernel_normalize(W, max_kernel_norm):
+    kernel_norms = T.sqrt(T.sum(T.sqr(W), axis=(1, 2, 3)))
+    desired_norms = T.clip(kernel_norms, 0, max_kernel_norm)
+    return W * (desired_norms / (1e-7 + kernel_norms)).dimshuffle(0, 'x', 'x', 'x')
+
 ###################################
 #   Layers
 ###################################
@@ -229,11 +234,16 @@ class ConvBNOnPixels(ForwardPropogator):
 
 
 class ConvolutionalLayer(ForwardPropogator):
-    def __init__(self, window, features_count, istdev=None, train_bias=True):
+    def __init__(self, window, features_count, istdev=None, train_bias=True, border_mode='valid', pad=0,
+                 max_kernel_norm=None):
+        assert border_mode in ('valid', 'full'), 'Border mode must be "valid" or "full"'
         self.features_count = features_count
         self.window = window
         self.istdev = istdev
         self.train_bias = train_bias
+        self.border_mode = border_mode
+        self.pad = pad
+        self.max_kernel_norm = max_kernel_norm
 
     def setup_input(self, input_shape):
         """input_shape=('c', 0, 1)"""
@@ -242,7 +252,11 @@ class ConvolutionalLayer(ForwardPropogator):
         channels = input_shape[0]
         self.filter_shape = (self.features_count, channels) + self.window
 
-        out_image_size = img_size - self.window[0] + 1
+        out_image_size = img_size+self.pad*2
+        if self.border_mode == 'valid':
+            out_image_size += -self.window[0] + 1
+        if self.border_mode == 'full':
+            out_image_size += self.window[0] - 1
         if self.istdev is None:
             n = np.prod(self.window) * self.features_count
             std = np.sqrt(2./n)
@@ -264,7 +278,14 @@ class ConvolutionalLayer(ForwardPropogator):
         return self.params
 
     def forward(self, X, train=False):
-        return conv2d(X, self.W, filter_shape=self.filter_shape) + self.b
+        X0 = T.zeros((X.shape[0], X.shape[1], X.shape[2]+self.pad*2, X.shape[3]+self.pad*2))
+        X0 = T.set_subtensor(X0[:, :, self.pad:X.shape[2]+self.pad, self.pad:X.shape[3]+self.pad], X)
+        return conv2d(X0, self.W, filter_shape=self.filter_shape, border_mode=self.border_mode) + self.b
+
+    def self_update(self, X, updates):
+        if self.max_kernel_norm is not None:
+            W = updates[self.W]
+            updates[self.W] = kernel_normalize(W, self.max_kernel_norm)
 
 
 class MaxPool(ForwardPropogator):
@@ -400,23 +421,44 @@ class MLP(ForwardPropogator):
                 weight_acc = theano.shared(np.zeros(p.get_value().shape, dtype=theano.config.floatX),
                                             broadcastable=p.broadcastable)
                 updates[grad_acc] = 0.9*grad_acc + 0.1*(grad**2)
-                lr_p = learning_rate*T.sqrt(weight_acc + 1e-3)/T.sqrt(updates[grad_acc] + 1e-7)
+                lr_p = learning_rate*T.sqrt(weight_acc + 1e-7)/T.sqrt(updates[grad_acc] + 1e-7)
                 delta_p = -lr_p*grad
                 updates[p] = p + delta_p
                 updates[weight_acc] = 0.9*weight_acc + 0.1*delta_p**2
+            elif method == 'adadelta+nesterov':
+                grad_acc = theano.shared(np.zeros(p.get_value().shape, dtype=theano.config.floatX),
+                                            broadcastable=p.broadcastable)
+                weight_acc = theano.shared(np.zeros(p.get_value().shape, dtype=theano.config.floatX),
+                                            broadcastable=p.broadcastable)
+                vel = theano.shared(p.get_value()*0., broadcastable=p.broadcastable)
+                updates[grad_acc] = 0.9*grad_acc + 0.1*(grad**2)
+                lr_p = learning_rate*T.sqrt(weight_acc + 1e-7)/T.sqrt(updates[grad_acc] + 1e-7)
+                updates[vel] = momentum*vel - lr_p*grad
+                updates[vel] = momentum*updates[vel] - lr_p*grad
+                updates[p] = p + updates[vel]
+                updates[weight_acc] = 0.9*weight_acc + 0.1*updates[vel]**2
             elif method == 'rmsprop':
                 mean_square = theano.shared(np.zeros(p.get_value().shape, dtype=theano.config.floatX),
                                             broadcastable=p.broadcastable)
                 updates[mean_square] = 0.9*mean_square + 0.1*(grad**2)
                 lr_p = T.clip(learning_rate/T.sqrt(updates[mean_square] + 1e-7), 1e-6, 50)
                 updates[p] = p - lr_p*grad
+            # elif method == 'esgd':
+            #     D = theano.shared(np.zeros(p.get_value().shape, dtype=theano.config.floatX),
+            #                                 broadcastable=p.broadcastable)
+            #     r = T.shared_randomstreams.RandomStreams()
+            #     v = r.normal(size=(grad.shape[1],), avg=0, std=1, dtype=theano.config.floatX)
+            #     i = theano.shared(np.array(0, dtype='uint8'))
+            #     updates[i] = i+1
+            #     updates[D] = D + (T.Rop(grad, p, v))**2
+            #     updates[p] = p - learning_rate*grad/(T.sqrt(D/updates[i]) + 1e-2)
+
             elif method in ('momentum', 'nesterov'):
                 vel = theano.shared(p.get_value()*0., broadcastable=p.broadcastable)
                 updates[vel] = momentum*vel - learning_rate*grad
                 if method == 'nesterov':
-                    updates[p] = p + momentum*updates[vel] - learning_rate*grad
-                else:
-                    updates[p] = p + updates[vel]
+                    updates[vel] = momentum*updates[vel] - learning_rate*grad
+                updates[p] = p + updates[vel]
             else:
                 raise AssertionError('invalid method: %s' % method)
         for l in self.layers:
