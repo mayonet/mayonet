@@ -83,22 +83,22 @@ mlp = MLP([
 
     Flatten(),
 
-    Dropout(p=0.8, w=1),
+    # Dropout(p=0.8),
     # GaussianDropout(0.5),
+    DenseLayer(1200, max_col_norm=.9365),
+    BatchNormalization(),
+    # NonLinearity(),
+    # PReLU(prelu_alpha),
+    Maxout(pieces=5),
+
+    GaussianDropout(1),
     DenseLayer(1200, max_col_norm=1.9365),
     BatchNormalization(),
     # NonLinearity(),
     # PReLU(prelu_alpha),
     Maxout(pieces=5),
 
-    # GaussianDropout(1),
-    DenseLayer(1200, max_col_norm=1.9365),
-    BatchNormalization(),
-    # NonLinearity(),
-    # PReLU(prelu_alpha),
-    Maxout(pieces=5),
-
-    # GaussianDropout(1),
+    GaussianDropout(1),
     DenseLayer(10, max_col_norm=1.9365),
     BatchNormalization(),
     NonLinearity(activation=T.nnet.softmax)
@@ -107,13 +107,15 @@ mlp = MLP([
 
 ## TODO move to mlp.get_updates
 l2 = 0  # 1e-5
-learning_rate = 8e-2
+learning_rate = 6e-2
 momentum = 0.99
 epoch_count = 1000
 batch_size = 100
 minibatch_count = train_x.shape[0] // batch_size
-learning_decay = 1  # 0.5 ** (1./(800 * minibatch_count))
-momentum_decay = 1  # 0.5 ** (1./(300 * minibatch_count))
+learning_decay = 0.5 ** (1./(800 * minibatch_count))
+momentum_decay = 0.5 ** (1./(300 * minibatch_count))
+lr_min = 1e-6
+mm_min = 0.45
 
 method = 'adadelta+nesterov'
 
@@ -138,8 +140,8 @@ nll = theano.function([X, Y], mlp.nll(X, Y, l2, train=False))
 lr = theano.shared(np.array(learning_rate, dtype=floatX))
 mm = theano.shared(np.array(momentum, dtype=floatX))
 updates = mlp.updates(cost, X, momentum=mm, learning_rate=lr, method=method)
-updates[lr] = lr * learning_decay
-updates[mm] = mm * momentum_decay
+updates[lr] = T.maximum(lr * learning_decay, lr_min)
+updates[mm] = T.maximum(mm * momentum_decay, mm_min)
 
 train_model = theano.function(
     inputs=[X, Y],
