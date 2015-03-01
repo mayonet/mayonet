@@ -16,27 +16,27 @@ DATA_DIR = '/plankton'
 TRAIN_DATA_DIR = os.path.join(DATA_DIR, 'train')
 TEST_DATA_DIR = os.path.join(DATA_DIR, 'test')
 
-CROP_SIZE = 80
+CROP_SIZE = 98
 
 
-def _read_labels():
+def read_labels():
     return sorted(os.listdir(TRAIN_DATA_DIR))
 
 
-def _get_test_data_paths():
+def get_test_data_paths():
     return sorted(os.listdir(TEST_DATA_DIR))
 
 
-def _iterate_train_data_paths():
-    for label in _read_labels():
+def iterate_train_data_paths():
+    for label in read_labels():
         for pict in os.listdir(os.path.join(TRAIN_DATA_DIR, label)):
             yield os.path.join(TRAIN_DATA_DIR, label, pict), label
 
 
-def _make_divisible_by_batch(indexi, batch_size):
+def make_divisible_by_batch(indexi, batch_size):
     """
     indexi is ndarray
-    >>> _make_divisible_by_batch(np.arange(10), 6)
+    >>> make_divisible_by_batch(np.arange(10), 6)
     array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1])
     """
     n = len(indexi)
@@ -97,11 +97,11 @@ class PlanktonDataset(dense_design_matrix.DenseDesignMatrix):
 
     def __init__(self, batch_size, which_set='train', one_hot=True, image_size=CROP_SIZE, resizing_method='crop'):
 
-        self.unique_labels = _read_labels()
+        self.unique_labels = read_labels()
         self.n_classes = len(self.unique_labels)
         self.label_to_int = {self.unique_labels[i]: i for i in range(self.n_classes)}
 
-        d = list(_iterate_train_data_paths())
+        d = list(iterate_train_data_paths())
         random.seed(11)
         random.shuffle(d)
         fns, labels = zip(*d)
@@ -115,14 +115,14 @@ class PlanktonDataset(dense_design_matrix.DenseDesignMatrix):
             y[i] = self.label_to_int[labels[i]]
 
         for train_i, valid_i in StratifiedKFold(labels, 6):
-            train_i = _make_divisible_by_batch(train_i, batch_size)
-            valid_i = _make_divisible_by_batch(valid_i, batch_size)
+            train_i = make_divisible_by_batch(train_i, batch_size)
+            valid_i = make_divisible_by_batch(valid_i, batch_size)
             if which_set == 'test':
-                self.test_fns = _get_test_data_paths()
+                self.test_fns = get_test_data_paths()
                 test_X = np.zeros((len(self.test_fns), image_size*image_size), dtype='float32')
                 for i, pic in enumerate(self.test_fns):
                     test_X[i] = read_image(os.path.join(TEST_DATA_DIR, pic), image_size, resizing_method)
-                test_i = _make_divisible_by_batch(np.arange(test_X.shape[0]), batch_size)
+                test_i = make_divisible_by_batch(np.arange(test_X.shape[0]), batch_size)
             else:
                 test_X= np.zeros(5)
                 test_i = range(3)

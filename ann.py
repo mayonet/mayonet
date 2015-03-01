@@ -68,20 +68,27 @@ class ForwardPropogator:
 
 
 class DenseLayer(ForwardPropogator):
-    def __init__(self, features_count, max_col_norm=None, activation=identity, leaky_relu_alpha=0):
+    def __init__(self, features_count, max_col_norm=None, activation=identity, leaky_relu_alpha=0,
+                 irange=None):
         self.activation = activation
         self.features_count = features_count
         self.max_col_norm = max_col_norm
         self.leaky_relu_alpha = leaky_relu_alpha
+        self.irange = irange
 
     def setup_input(self, input_shape):
         assert len(input_shape) == 1, 'DenseLayer''s input must be 1 dimensional'
         self.in_dim = np.prod(input_shape)
 
-        self.W = theano.shared(np.cast[theano.config.floatX](
-            np.random.normal(0, np.sqrt(2./((1+self.leaky_relu_alpha**2)*self.features_count)),
-                             (self.in_dim, self.features_count))),
-            borrow=True)
+        if self.irange is None:
+            self.W = theano.shared(np.cast[theano.config.floatX](
+                np.random.normal(0, np.sqrt(2./((1+self.leaky_relu_alpha**2)*self.features_count)),
+                                 (self.in_dim, self.features_count))),
+                borrow=True)
+        else:
+            self.W = theano.shared(np.cast[theano.config.floatX](
+                np.random.uniform(-self.irange, self.irange,
+                                  (self.in_dim, self.features_count))), borrow=True)
         self.b = theano.shared(np.zeros((1, self.features_count), dtype=theano.config.floatX), borrow=True,
                                broadcastable=(True, False))
         return self.features_count,

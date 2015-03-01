@@ -41,14 +41,14 @@ class Logger(object):
 
 # image size
 s = 98
-BATCH_SIZE = 64
+BATCH_SIZE = 100
 
 med_r = [[0], [3]*1 + [2]*2 + [1]*4 + [0]*8]
 mea_r = [[0], [2]*1 + [1]*2 + [0]*4]
 mea = mea_r[0]
 med = med_r[0]
 
-exp_names = ['maxout1000']  # , 'maxout500', 'fc1000', 'maxout1000']
+exp_names = ['pylearn_vs_pycton']  # , 'maxout500', 'fc1000', 'maxout1000']
 
 for exp_name in exp_names:
 
@@ -77,7 +77,7 @@ for exp_name in exp_names:
     trn = load_pickle(BATCH_SIZE, 'train', method='bluntresize', size=s)
     vld = load_pickle(BATCH_SIZE, 'valid', method='bluntresize', size=s)
 
-    window = (s-2, s-2)
+    window = (s, s)
     n_classes = trn.n_classes
     in_space = Conv2DSpace(shape=window,
                            num_channels=1,
@@ -91,32 +91,28 @@ for exp_name in exp_names:
     else:
         c16 = mlp.ConvRectifiedLinear(output_channels=16,
                                       kernel_shape=(3, 3),
-                                      pool_shape=(2, 2),
-                                      pool_stride=(2, 2),
+                                      pool_shape=(3, 3),
+                                      pool_stride=(3, 3),
                                       layer_name='c16',
-                                      irange=0.05,
-                                      max_kernel_norm=.9365)
+                                      irange=0.05)
         c32 = mlp.ConvRectifiedLinear(output_channels=32,
                                       kernel_shape=(3, 3),
-                                      pool_shape=(2, 2),
-                                      pool_stride=(2, 2),
+                                      pool_shape=(3, 3),
+                                      pool_stride=(3, 3),
                                       layer_name='c32',
-                                      irange=0.05,
-                                      max_kernel_norm=.9365)
-        c48 = mlp.ConvRectifiedLinear(output_channels=48,
-                                      kernel_shape=(3, 3),
-                                      pool_shape=(2, 2),
-                                      pool_stride=(2, 2),
-                                      layer_name='c48',
-                                      irange=0.05,
-                                      max_kernel_norm=.9365)
+                                      irange=0.05)
         c64 = mlp.ConvRectifiedLinear(output_channels=64,
                                       kernel_shape=(3, 3),
                                       pool_shape=(2, 2),
                                       pool_stride=(2, 2),
                                       layer_name='c64',
-                                      irange=0.05,
-                                      max_kernel_norm=.9365)
+                                      irange=0.05)
+        c6_ = mlp.ConvRectifiedLinear(output_channels=64,
+                                      kernel_shape=(3, 3),
+                                      pool_shape=(2, 2),
+                                      pool_stride=(2, 2),
+                                      layer_name='c64',
+                                      irange=0.05)
 
         mo500 = maxout.Maxout(layer_name='maxout500',
                               irange=.005,
@@ -130,17 +126,17 @@ for exp_name in exp_names:
                                num_pieces=5,
                                max_col_norm=.9)
 
-        fc1000 = mlp.RectifiedLinear(dim=1000,
-                                     layer_name='fc1000',
-                                     irange=0.05,
-                                     max_col_norm=.9,
-                                     init_bias=0.01)
+        fc0 = mlp.RectifiedLinear(dim=1200,
+                                  layer_name='fc1200_0',
+                                  irange=0.05,
+                                  max_col_norm=1.9365,
+                                  init_bias=0)
 
-        fc2500 = mlp.RectifiedLinear(dim=2500,
-                                     layer_name='fc2500',
-                                     irange=0.05,
-                                     max_col_norm=.9,
-                                     init_bias=0.01)
+        fc1 = mlp.RectifiedLinear(dim=1200,
+                                  layer_name='fc1200_1',
+                                  irange=0.05,
+                                  max_col_norm=1.9365,
+                                  init_bias=0)
 
         fc5000 = mlp.RectifiedLinear(dim=5000,
                                      layer_name='fc5000',
@@ -148,7 +144,7 @@ for exp_name in exp_names:
                                      max_col_norm=.9,
                                      init_bias=0.01)
 
-        exp_layer = {L.layer_name: L for L in [mo500, mo1000, fc1000, fc2500, fc5000]}
+        # exp_layer = {L.layer_name: L for L in [mo500, mo1000, fc1000, fc2500, fc5000]}
 
         # mo1 = maxout.Maxout(layer_name='mo1',
         #                     irange=.005,
@@ -173,11 +169,9 @@ for exp_name in exp_names:
                              irange=0.1,
                              max_col_norm=1.9365)
 
-        layers = [c16,
-                  c32,
-                  c48,
-                  c64,
-                  exp_layer[exp_name],
+        layers = [c16, c32, c64,
+                  fc0,
+                  fc1,
                   output]
         mdl = mlp.MLP(layers=layers,
                       input_space=in_space
@@ -193,22 +187,22 @@ for exp_name in exp_names:
     # print('dropout scales: ', dropout_scales)
 
 
-    trainer = sgd.SGD(learning_rate=1e-1,
+    trainer = sgd.SGD(learning_rate=6e-2,
                       batch_size=BATCH_SIZE,
-                      learning_rule=learning_rule.Momentum(.9),
-                      cost=Dropout(default_input_scale=1.,
-                                   input_include_probs={exp_name: 0.5},
-                                   input_scales={exp_name: 2.},
-                                   # input_scales=dropout_scales,
-                                   # input_include_probs=dropout_probs,
-                                   default_input_include_prob=1.),
+                      learning_rule=learning_rule.Momentum(.99, nesterov_momentum=True),
+                      # cost=Dropout(default_input_scale=1.,
+                      #              # input_include_probs={exp_name: 0.5},
+                      #              # input_scales={exp_name: 2.},
+                      #              # input_scales=dropout_scales,
+                      #              # input_include_probs=dropout_probs,
+                      #              default_input_include_prob=1.),
                       termination_criterion=EpochCounter(max_epochs=2000),
                       monitoring_dataset={'valid': vld,
                                           'train': trn})
 
-    # velocity = learning_rule.MomentumAdjustor(final_momentum=.65,
-    #                                           start=1,
-    #                                           saturate=250)
+    velocity = learning_rule.MomentumAdjustor(final_momentum=.65,
+                                              start=1,
+                                              saturate=250)
 
     watcher = best_params.MonitorBasedSaveBest(
         channel_name='valid_y_nll',
@@ -218,7 +212,7 @@ for exp_name in exp_names:
     #                                  saturate=350,
     #                                  decay_factor=.01)
 
-    decay = sgd.OneOverEpoch(start=1, half_life=50)
+    decay = sgd.OneOverEpoch(start=1, half_life=800)
 
     def create_rotator(randomize=(), center=()):
         return rotator.Rotator(window=window, randomize=randomize, center=center,
@@ -239,10 +233,9 @@ for exp_name in exp_names:
                        model=mdl,
                        algorithm=trainer,
                        extensions=[watcher,
-                                   decay,
                                    # velocity,
-                                   rtr,
-                                   vlr,
+                                   # rtr,
+                                   # vlr,
                                    decay],
                        save_path=model_save_path,
                        save_freq=1)

@@ -2,11 +2,8 @@
 from __future__ import division, print_function
 from time import time
 import math
-
+from np_dataset import load_npys
 import numpy as np
-from pylearn2.format.target_format import convert_to_one_hot
-from spyderlib.utils.qthelpers import MacApplication
-
 import theano
 import theano.tensor as T
 # theano.config.compute_test_value = 'warn'
@@ -14,46 +11,20 @@ theano.config.exception_verbosity = 'high'
 theano.config.floatX = 'float32'
 theano.config.blas.ldflags = '-lblas -lgfortran'
 floatX = theano.config.floatX
-
 from ann import *
 
 
 np.random.seed(1100)
 
-import os
-if not os.path.isfile('mnist.pkl.gz'):
-    import urllib
-    origin = (
-        'http://www.iro.umontreal.ca/~lisa/deep/data/mnist/mnist.pkl.gz'
-    )
-    print('Downloading data from %s' % origin)
-    urllib.urlretrieve(origin, 'mnist.pkl.gz')
-import gzip
-import cPickle
-with gzip.open('mnist.pkl.gz', 'rb') as f:
-    train_set, valid_set, test_set = cPickle.load(f)
+dtype_y = 'uint8'
 
-dtype_y = 'int32'
+train_x, train_y = load_npys(which_set='train', image_size=98)
+valid_x, valid_y = load_npys(which_set='valid', image_size=98)
 
-
-def to_img(rows, channels_count=1):
-    assert len(rows.shape) == 2
-    n = rows.shape[0]
-    size = math.sqrt(rows.shape[1] // channels_count)
-    assert size*size == rows.shape[1] // channels_count
-    return rows.reshape(n, channels_count, size, size)
-
-train_x = to_img(train_set[0])
-train_y = convert_to_one_hot(train_set[1], dtype=dtype_y)
-
-valid_x = to_img(valid_set[0])
-valid_y = convert_to_one_hot(valid_set[1], dtype=dtype_y)
-
-# train_x = np.vstack((train_x, valid_x))
-# train_y = np.vstack((train_y, valid_y))
-
-test_x = to_img(test_set[0])
-test_y = convert_to_one_hot(test_set[1], dtype=dtype_y)
+train_x = train_x.reshape((train_x.shape[0], 1, np.sqrt(train_x.shape[1]), np.sqrt(train_x.shape[1])))
+valid_x = valid_x.reshape((valid_x.shape[0], 1, np.sqrt(valid_x.shape[1]), np.sqrt(valid_x.shape[1])))
+train_x = np.cast[floatX](1.-train_x/255.)
+valid_x = np.cast[floatX](1.-valid_x/255.)
 
 
 len_in = train_x.shape[1]
@@ -62,20 +33,25 @@ len_out = train_y.shape[1]
 prelu_alpha = 0.25
 
 mlp = MLP([
-    # ConvolutionalLayer((8, 8), 96, train_bias=True, pad=0, max_kernel_norm=0.9),
+    ConvolutionalLayer((3, 3), 16, train_bias=True, pad=0),
     # BatchNormalization(),
-    # MaxPool((4, 4), (2, 2)),
-    # # NonLinearity(),
+    MaxPool((3, 3), (3, 3)),
+    NonLinearity(),
     # Maxout(2),
-    #
-    # # GaussianDropout(0.5),
-    #
-    # ConvolutionalLayer((8, 8), 96, train_bias=True, pad=3, max_kernel_norm=1.9365),
+
+    # GaussianDropout(0.5),
+
+    ConvolutionalLayer((3, 3), 32, train_bias=True, pad=0),
     # BatchNormalization(),
-    # MaxPool((4, 4), (2, 2)),
-    # # NonLinearity(),
+    MaxPool((3, 3), (3, 3)),
+    NonLinearity(),
+
+    ConvolutionalLayer((3, 3), 64, train_bias=True, pad=0),
+    # BatchNormalization(),
+    MaxPool((2, 2), (2, 2)),
+    NonLinearity(),
     # Maxout(2),
-    #
+
     # # GaussianDropout(1),
     #
     # ConvolutionalLayer((5, 5), 48, train_bias=True, pad=3, max_kernel_norm=1.9365),
@@ -85,25 +61,22 @@ mlp = MLP([
     # Maxout(2),
 
     Flatten(),
-    Dropout(p=0.8),
+
     # GaussianDropout(0.5),
-    DenseLayer(1200, max_col_norm=1.9365, leaky_relu_alpha=1),
-    BatchNormalization(),
-    # NonLinearity(),
+    DenseLayer(1200, leaky_relu_alpha=1),
+    # BatchNormalization(),
+    NonLinearity(),
     # PReLU(prelu_alpha),
-    Maxout(pieces=5),
 
     # GaussianDropout(1),
-    DenseLayer(1200, max_col_norm=1.9365, leaky_relu_alpha=2),
-    BatchNormalization(),
-    # NonLinearity(),
+    DenseLayer(1200, leaky_relu_alpha=0),
+    # BatchNormalization(),
+    NonLinearity(),
     # PReLU(prelu_alpha),
-    # Dropout(p=0.8, w=1),
-    Maxout(pieces=5),
 
     # GaussianDropout(1),
-    DenseLayer(10, max_col_norm=1.9365, leaky_relu_alpha=2),
-    BatchNormalization(),
+    DenseLayer(len_out, leaky_relu_alpha=0),
+    # BatchNormalization(),
     NonLinearity(activation=T.nnet.softmax)
 ], train_x.shape[1:])
 
@@ -184,10 +157,3 @@ for i in range(epoch_count):
 total_spent_time = time() - train_start
 print('Trained %d epochs in %.1f seconds (%.2f seconds in average)' % (epoch_count, total_spent_time,
                                                                        total_spent_time / epoch_count))
-# mc = '%.1f%%' % (misclass(test_x, test_y)*100)
-# print(mc)
-
-
-
-
-
