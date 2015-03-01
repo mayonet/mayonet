@@ -360,9 +360,12 @@ class GaussianDropout(ForwardPropogator):
 
 
 class Maxout(ForwardPropogator):
-    def __init__(self, pieces=2  # , pool_stride=None
+    def __init__(self, pieces=2,
+                 # , pool_stride=None
+                 min_zero=False
                  ):
         self.pieces = pieces
+        self.min_zero = min_zero
         # self.pool_stride = self.pieces if pool_stride is None else pool_stride
 
     def setup_input(self, input_shape):
@@ -376,7 +379,10 @@ class Maxout(ForwardPropogator):
 
     def forward(self, X, train=False):
         Xs = T.reshape(X, (X.shape[0], self.pieces, self.output_num) + self.input_shape[1:])
-        return T.max(Xs, axis=1)
+        Xs = T.max(Xs, axis=1)
+        if self.min_zero:
+            Xs = T.maximum(Xs, 0.)
+        return Xs
 
 
 ####################################

@@ -83,20 +83,20 @@ mlp = MLP([
 
     Flatten(),
 
-    # Dropout(p=0.8),
     # GaussianDropout(0.5),
-    DenseLayer(1200, max_col_norm=.9365),
+    DenseLayer(1200, max_col_norm=1.9365),
     BatchNormalization(),
     # NonLinearity(),
     # PReLU(prelu_alpha),
-    Maxout(pieces=5),
+    Dropout(p=0.8, w=1),
+    Maxout(pieces=5, min_zero=True),
 
     GaussianDropout(1),
     DenseLayer(1200, max_col_norm=1.9365),
     BatchNormalization(),
     # NonLinearity(),
     # PReLU(prelu_alpha),
-    Maxout(pieces=5),
+    Maxout(pieces=5, min_zero=True),
 
     GaussianDropout(1),
     DenseLayer(10, max_col_norm=1.9365),
@@ -115,7 +115,7 @@ minibatch_count = train_x.shape[0] // batch_size
 learning_decay = 0.5 ** (1./(800 * minibatch_count))
 momentum_decay = 0.5 ** (1./(300 * minibatch_count))
 lr_min = 1e-6
-mm_min = 0.45
+mm_min = 0.4
 
 method = 'adadelta+nesterov'
 
