@@ -15,45 +15,45 @@ def one_hot(y):
     return y0
 
 
-def read_data(which_set='train', image_size=CROP_SIZE, resizing_method='bluntresize'):
-        unique_labels = read_labels()
-        n_classes = len(unique_labels)
-        label_to_int = {unique_labels[i]: i for i in range(n_classes)}
+def read_data(which_set='train', image_size=CROP_SIZE, resizing_method='bluntresize', only_labels=None):
+    unique_labels = read_labels()
+    n_classes = len(unique_labels)
+    label_to_int = {unique_labels[i]: i for i in range(n_classes)}
 
-        if which_set == 'test':
-            test_fns = get_test_data_paths()
-            x = np.zeros((len(test_fns), image_size*image_size), dtype='float32')
-            for i, pic in enumerate(test_fns):
-                x[i] = read_image(os.path.join(TEST_DATA_DIR, pic), image_size, resizing_method)
-            y = None
-        else:
-            d = list(iterate_train_data_paths())
-            random.seed(11)
-            random.shuffle(d)
-            fns, labels = zip(*d)
+    if which_set == 'test':
+        test_fns = get_test_data_paths()
+        x = np.zeros((len(test_fns), image_size*image_size), dtype='float32')
+        for i, pic in enumerate(test_fns):
+            x[i] = read_image(os.path.join(TEST_DATA_DIR, pic), image_size, resizing_method)
+        y = None
+    else:
+        d = list(iterate_train_data_paths())
+        random.seed(11)
+        random.shuffle(d)
+        fns, labels = zip(*d)
 
-            n = len(fns)
-            x = np.zeros((n, image_size*image_size), dtype='float32')
-            y = np.zeros(n, dtype='uint8')
+        n = len(fns)
+        x = np.zeros((n, image_size*image_size), dtype='float32')
+        y = np.zeros(n, dtype='uint8')
 
-            for i in range(n):
-                x[i] = read_image(fns[i], image_size, resizing_method)
-                y[i] = label_to_int[labels[i]]
+        for i in range(n):
+            x[i] = read_image(fns[i], image_size, resizing_method)
+            y[i] = label_to_int[labels[i]]
 
-            for train_i, valid_i in StratifiedKFold(labels, 6):
+        for train_i, valid_i in StratifiedKFold(labels, 6):
 
-                Xs = {'train': x[train_i],
-                      'valid': x[valid_i],
-                      'all': x}
+            Xs = {'train': x[train_i],
+                  'valid': x[valid_i],
+                  'all': x}
 
-                Ys = {'train': y[train_i],
-                      'valid': y[valid_i],
-                      'all': y}
-                x = Xs[which_set]
-                y = one_hot(Ys[which_set])
-                break
+            Ys = {'train': y[train_i],
+                  'valid': y[valid_i],
+                  'all': y}
+            x = Xs[which_set]
+            y = one_hot(Ys[which_set])
+            break
 
-        return x, y
+    return x, y
 
 
 def np_fn(data_dir, which_set, image_size, resizing_method, postfix='x'):
