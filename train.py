@@ -215,7 +215,7 @@ for exp_name in exp_names:
     decay = sgd.OneOverEpoch(start=1, half_life=800)
 
     def create_rotator(randomize=(), center=()):
-        return rotator.Rotator(window=window, randomize=randomize, center=center,
+        return rotator.RotatorExtension(window=window, randomize=randomize, center=center,
                                x_offsets=range(2),
                                y_offsets=range(2),
                                median_radii=med,

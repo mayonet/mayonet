@@ -9,8 +9,10 @@ from skimage.filter import rank
 from skimage.morphology import disk
 import multiprocessing
 
+from PIL import Image
 
-class Rotator(TrainExtension):
+
+class RotatorExtension(TrainExtension):
 
     def __init__(self, window, randomize, center=(),
                  angles=range(360),
@@ -87,3 +89,63 @@ class Rotator(TrainExtension):
         new_x, new_y = new_size
         off_x, off_y = offset
         return img[off_x:(off_x + new_x), off_y:(off_y + new_y), :]
+
+
+def crop_01(img, offset, new_size):
+    new_x, new_y = new_size
+    off_x, off_y = offset
+    return img[off_x:(off_x + new_x), off_y:(off_y + new_y)]
+
+
+def basic_crop(img, new_sizes):
+    h, w = img.shape
+    cropped = np.zeros(new_sizes, dtype=img.dtype)
+    start_y = (new_sizes[0] - h) // 2
+    start_x = (new_sizes[1] - w) // 2
+    new_h, new_w = min(h, new_sizes[0]), min(w, new_sizes[1])
+    cropped[max(start_y, 0):(max(start_y, 0) + new_h),
+            max(start_x, 0):(max(start_x, 0) + new_w)] = img[max(-start_y, 0):(max(-start_y, 0) + new_h),
+                                                             max(-start_x, 0):(max(-start_x, 0) + new_w)]
+    return cropped
+
+
+def randomize_image_c01(img, window, angles=range(360), x_offsets=(0, 1), y_offsets=(0, 1),
+                        median_radii=(0,), mean_radii=(0,), flip=True, scales=(1,)):
+    offsets = list(product(y_offsets, x_offsets))
+    img = img[0]
+    h, w = img.shape
+    # im = Image.fromarray(np.cast['uint8'](img*255))
+    # scale = choice(scales)
+    # im = im.resize((int(w*scale), int(h*scale)))
+    # im = im.rotate(choice(angles))
+    # img = np.asarray(im, dtype='float32')/255.
+    img = rescale(img, choice(scales))
+    img = rotate(img, choice(angles))
+    if flip and randint(0, 1) == 0:
+        img = np.fliplr(img)
+
+    img = basic_crop(img, [h, w])
+
+    max_offset = [d-w for d, w in zip(img.shape, window)]
+    if img.shape != window:
+        offset = [c1//2 + r*choice([1, -1]) for c1, r in zip(max_offset, choice(offsets))]
+        img = crop_01(img, offset, window)
+
+    med = choice(median_radii)
+    if med > 0:
+        img = rank.median(img, disk(med))
+    mea = choice(mean_radii)
+    if mea > 0:
+        img = rank.mean(img, disk(mea))
+    return img[np.newaxis, :, :]
+
+# t0 = time()
+# batch_x = randomize_dataset(train_x, (96, 96), scales=(2, 0.5))
+# print(time() - t0)
+
+def randomize_dataset_bc01(imgs, window, angles=range(360), x_offsets=(0, 1), y_offsets=(0, 1),
+                           median_radii=(0,), mean_radii=(0,), flip=True, scales=(1,)):
+    return np.array([randomize_image_c01(img, window, angles,
+                                         x_offsets, y_offsets,
+                                         median_radii, mean_radii,
+                                         flip, scales) for img in imgs], dtype='float32')

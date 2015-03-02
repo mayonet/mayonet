@@ -41,7 +41,7 @@ y = None
 for k in range(subsets):
     ds.set_topological_view(backed[step*k:step*(k+1), :, :, :], ds.view_converter.axes)
     y0 = np.zeros((ds.X.shape[0], 121))
-    rtr = rotator.Rotator(window, [ds], [],
+    rtr = rotator.RotatorExtension(window, [ds], [],
                           x_offsets=range(2),
                           y_offsets=range(2),
                           scales=[1.01**(p*abs(p)) for p in map(lambda x: x/2., range(-11, 9))],

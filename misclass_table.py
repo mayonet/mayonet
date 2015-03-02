@@ -35,7 +35,7 @@ log('created dataset')
 y = None
 
 y0 = np.zeros((ds.X.shape[0], 121))
-rtr = rotator.Rotator(window, [ds], [],
+rtr = rotator.RotatorExtension(window, [ds], [],
                       x_offsets=range(2),
                       y_offsets=range(2),
                       median_radii=[0],
