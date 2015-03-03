@@ -8,7 +8,12 @@
 from __future__ import print_function
 from collections import OrderedDict
 from itertools import chain
+import itertools
+import cPickle
+from select import epoll
+from concurrent.futures import ProcessPoolExecutor
 import numpy as np
+import sys
 import theano
 from theano.sandbox.cuda.dnn import dnn_pool
 import theano.tensor as T
@@ -19,6 +24,7 @@ import theano.tensor as T
 #########################################
 from theano.tensor.nnet import conv2d
 from theano.tensor.signal.downsample import max_pool_2d
+import time
 
 
 def identity(X):
@@ -486,3 +492,124 @@ class MLP(ForwardPropogator):
         for p, l2scale in self.get_params():
             L += T.sum(l2scale * l2 * p * p / 2)
         return L
+
+
+def Trainer(mlp, batch_size, learning_rate, train_X, train_y, valid_X=None, valid_y=None, method='sgd',
+            momentum=0, lr_decay=1, lr_min=1e-9, l2=0, mm_decay=1, mm_min=1e-9,
+            train_augmentation=identity, valid_augmentation=identity, valid_aug_count=1,
+            model_file_name=None, save_freq=None, epoch_count=None):
+
+    floatX = theano.config.floatX
+    minibatch_count = train_X.shape[0] // batch_size
+    X = T.tensor4('X4', dtype=floatX)
+    Y = T.matrix('Y', dtype=train_y.dtype)
+    prob = mlp.forward(X)
+    cost = mlp.nll(X, Y, l2, train=True)
+
+    if valid_X is None:
+        valid_X = train_X
+    if valid_y is None:
+        valid_y = train_y
+
+    misclass = theano.function([X, Y], T.eq(T.argmax(prob, axis=1), T.argmax(Y, axis=1)))
+
+    nll = theano.function([X, Y], mlp.nll(X, Y, l2, train=False))
+
+
+
+    lr = theano.shared(np.array(learning_rate, dtype=floatX))
+    mm = theano.shared(np.array(momentum, dtype=floatX))
+    updates = mlp.updates(cost, X, momentum=mm, learning_rate=lr, method=method)
+    updates[lr] = T.maximum(lr * lr_decay, lr_min)
+    updates[mm] = T.maximum(mm * mm_decay, mm_min)
+
+    train_model = theano.function(
+        inputs=[X, Y],
+        outputs=cost,
+        updates=updates
+    )
+
+    def trainer_func():
+        r_train_x = train_augmentation(train_X)
+        indexes = np.arange(train_X.shape[0])
+        train_start = time.time()
+        best_v_nll = 2.
+        if epoch_count is None:
+            iterator = range(epoch_count)
+        else:
+            iterator = itertools.count()
+        for i in iterator:
+            epoch_start_time = time.time()
+            np.random.shuffle(indexes)
+
+            with ProcessPoolExecutor(max_workers=2)as ex:
+                valid_futures = ex.map(valid_augmentation, itertools.repeat(valid_X, valid_aug_count))
+                train_future = ex.submit(train_augmentation, train_X)
+                # valid_future = ex.submit(randomize, valid_x)
+                batch_nlls = []
+                for b in range(minibatch_count):
+                    k = indexes[b * batch_size:(b + 1) * batch_size]
+                    batch_x = r_train_x[k]
+                    batch_y = train_y[k]
+                    batch_nll = float(train_model(batch_x, batch_y))
+                    batch_nlls.append(batch_nll)
+                train_nll = np.mean(batch_nlls)
+                r_train_x = None  # Try to free up some memory
+
+                test_nlls = []
+                valid_misclasses = []
+                # r_valid_x = valid_future.result()
+                for r_valid_x in valid_futures:
+                    # valid_future = ex.submit(randomize, valid_x)
+                    for vb in range(valid_X.shape[0] // batch_size):
+                        k = range(vb * batch_size, (vb + 1) * batch_size)
+                        batch_x = r_valid_x[k]
+                        batch_y = valid_y[k]
+                        batch_nll = float(nll(batch_x, batch_y))
+                        test_nlls.append(batch_nll)
+                        batch_misclass = misclass(batch_x, batch_y) * 100
+                        valid_misclasses.append(batch_misclass)
+                    # r_valid_x = valid_future.result()
+                test_nll = np.mean(test_nlls)
+                if test_nll < best_v_nll:
+                    best_v_nll = test_nll
+                    cPickle.dump(mlp, open('best_' + model_file_name, 'wb'), protocol=cPickle.HIGHEST_PROTOCOL)
+                valid_misclass = np.mean(valid_misclasses)
+                epoch_time = time.time() - epoch_start_time
+                yield {
+                    'epoch': i,
+                    'train_nll': train_nll,
+                    'test_nll': test_nll,
+                    'epoch_time': epoch_time,
+                    'valid_misclass': valid_misclass,
+                    'lr': float(lr.get_value()),
+                    'momentum': float(mm.get_value()),
+                }
+                r_train_x = train_future.result()
+            if save_freq is not None and save_freq > 0 and i % save_freq == 0:
+                cPickle.dump(mlp, open(model_file_name, 'wb'), protocol=cPickle.HIGHEST_PROTOCOL)
+
+
+    return trainer_func
+
+
+
+
+        # self.batch_size = batch_size
+        # self.learning_rate = learning_rate
+        # self.train_X = train_X
+        # self.train_y = train_y
+        # self.valid_X = valid_X
+        # self.valid_y = valid_y
+        # self.method = method
+        # self.momentum = momentum
+        # self.lr_decay = lr_decay
+        # self.lr_min = lr_min
+        # self.l2 = l2
+        # self.mm_decay = mm_decay
+        # self.mm_min = mm_min
+        # self.train_augmentation = train_augmentation
+        # self.valid_augmentation = valid_augmentation
+        # self.valid_aug_count = valid_aug_count
+        # self.logger = logger
+        # self.minibatch_count = self.
