@@ -423,15 +423,15 @@ class MLP(ForwardPropogator):
                 updates[p] = p - learning_rate*grad
             elif method == 'adagrad':
                 grad_acc = theano.shared(np.zeros(p.get_value().shape, dtype=theano.config.floatX),
-                                            broadcastable=p.broadcastable)
+                                         broadcastable=p.broadcastable)
                 updates[grad_acc] = grad_acc + grad**2
                 lr_p = T.clip(learning_rate/T.sqrt(updates[grad_acc] + 1e-7), 1e-6, 50)
                 updates[p] = p - lr_p*grad
             elif method == 'adadelta':
                 grad_acc = theano.shared(np.zeros(p.get_value().shape, dtype=theano.config.floatX),
-                                            broadcastable=p.broadcastable)
+                                         broadcastable=p.broadcastable)
                 weight_acc = theano.shared(np.zeros(p.get_value().shape, dtype=theano.config.floatX),
-                                            broadcastable=p.broadcastable)
+                                           broadcastable=p.broadcastable)
                 updates[grad_acc] = 0.9*grad_acc + 0.1*(grad**2)
                 lr_p = learning_rate*T.sqrt(weight_acc + 1e-7)/T.sqrt(updates[grad_acc] + 1e-7)
                 delta_p = -lr_p*grad
@@ -439,9 +439,9 @@ class MLP(ForwardPropogator):
                 updates[weight_acc] = 0.9*weight_acc + 0.1*delta_p**2
             elif method == 'adadelta+nesterov':
                 grad_acc = theano.shared(np.zeros(p.get_value().shape, dtype=theano.config.floatX),
-                                            broadcastable=p.broadcastable)
+                                         broadcastable=p.broadcastable)
                 weight_acc = theano.shared(np.zeros(p.get_value().shape, dtype=theano.config.floatX),
-                                            broadcastable=p.broadcastable)
+                                           broadcastable=p.broadcastable)
                 vel = theano.shared(p.get_value()*0., broadcastable=p.broadcastable)
                 updates[grad_acc] = 0.9*grad_acc + 0.1*(grad**2)
                 lr_p = learning_rate*T.sqrt(weight_acc + 1e-7)/T.sqrt(updates[grad_acc] + 1e-7)
@@ -552,9 +552,7 @@ def Trainer(mlp, batch_size, learning_rate, train_X, train_y, valid_X=None, vali
 
                 test_nlls = []
                 valid_misclasses = []
-                # r_valid_x = valid_future.result()
                 for r_valid_x in valid_futures:
-                    # valid_future = ex.submit(randomize, valid_x)
                     for vb in range(valid_X.shape[0] // batch_size):
                         k = range(vb * batch_size, (vb + 1) * batch_size)
                         batch_x = r_valid_x[k]
