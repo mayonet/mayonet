@@ -10,22 +10,18 @@ from collections import OrderedDict
 from itertools import chain
 import itertools
 import cPickle
-from select import epoll
 from concurrent.futures import ProcessPoolExecutor
 import numpy as np
-import sys
 import theano
 from theano.sandbox.cuda.dnn import dnn_pool
 import theano.tensor as T
+from theano.tensor.nnet import conv2d
+import time
 
 
 ########################################
 #  Activation Functions
 #########################################
-from theano.tensor.nnet import conv2d
-from theano.tensor.signal.downsample import max_pool_2d
-import time
-
 
 def identity(X):
     return X
@@ -532,7 +528,6 @@ def Trainer(mlp, batch_size, learning_rate, train_X, train_y, valid_X=None, vali
     def trainer_func():
         r_train_x = train_augmentation(train_X)
         indexes = np.arange(train_X.shape[0])
-        train_start = time.time()
         best_v_nll = 2.
         if epoch_count is None:
             iterator = range(epoch_count)
@@ -545,7 +540,6 @@ def Trainer(mlp, batch_size, learning_rate, train_X, train_y, valid_X=None, vali
             with ProcessPoolExecutor(max_workers=2)as ex:
                 valid_futures = ex.map(valid_augmentation, itertools.repeat(valid_X, valid_aug_count))
                 train_future = ex.submit(train_augmentation, train_X)
-                # valid_future = ex.submit(randomize, valid_x)
                 batch_nlls = []
                 for b in range(minibatch_count):
                     k = indexes[b * batch_size:(b + 1) * batch_size]
@@ -554,7 +548,7 @@ def Trainer(mlp, batch_size, learning_rate, train_X, train_y, valid_X=None, vali
                     batch_nll = float(train_model(batch_x, batch_y))
                     batch_nlls.append(batch_nll)
                 train_nll = np.mean(batch_nlls)
-                r_train_x = None  # Try to free up some memory
+                del r_train_x  # Try to free up some memory
 
                 test_nlls = []
                 valid_misclasses = []
@@ -569,7 +563,6 @@ def Trainer(mlp, batch_size, learning_rate, train_X, train_y, valid_X=None, vali
                         test_nlls.append(batch_nll)
                         batch_misclass = misclass(batch_x, batch_y) * 100
                         valid_misclasses.append(batch_misclass)
-                    # r_valid_x = valid_future.result()
                 test_nll = np.mean(test_nlls)
                 if test_nll < best_v_nll:
                     best_v_nll = test_nll
@@ -589,27 +582,4 @@ def Trainer(mlp, batch_size, learning_rate, train_X, train_y, valid_X=None, vali
             if save_freq is not None and save_freq > 0 and i % save_freq == 0:
                 cPickle.dump(mlp, open(model_file_name, 'wb'), protocol=cPickle.HIGHEST_PROTOCOL)
 
-
     return trainer_func
-
-
-
-
-        # self.batch_size = batch_size
-        # self.learning_rate = learning_rate
-        # self.train_X = train_X
-        # self.train_y = train_y
-        # self.valid_X = valid_X
-        # self.valid_y = valid_y
-        # self.method = method
-        # self.momentum = momentum
-        # self.lr_decay = lr_decay
-        # self.lr_min = lr_min
-        # self.l2 = l2
-        # self.mm_decay = mm_decay
-        # self.mm_min = mm_min
-        # self.train_augmentation = train_augmentation
-        # self.valid_augmentation = valid_augmentation
-        # self.valid_aug_count = valid_aug_count
-        # self.logger = logger
-        # self.minibatch_count = self.
