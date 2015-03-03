@@ -244,7 +244,7 @@ class ConvBNOnPixels(ForwardPropogator):
 
 class ConvolutionalLayer(ForwardPropogator):
     def __init__(self, window, features_count, train_bias=True, border_mode='valid', pad=0,
-                 max_kernel_norm=None, leaky_relu_alpha=0):
+                 max_kernel_norm=None, leaky_relu_alpha=0, irange=None):
         assert border_mode in ('valid', 'full'), 'Border mode must be "valid" or "full"'
         self.features_count = features_count
         self.window = window
@@ -253,6 +253,7 @@ class ConvolutionalLayer(ForwardPropogator):
         self.pad = pad
         self.max_kernel_norm = max_kernel_norm
         self.leaky_relu_alpha = leaky_relu_alpha
+        self.irange = irange
 
     def setup_input(self, input_shape):
         """input_shape=('c', 0, 1)"""
@@ -267,8 +268,13 @@ class ConvolutionalLayer(ForwardPropogator):
         if self.border_mode == 'full':
             out_image_size += self.window[0] - 1
         n = np.prod(self.window) * self.features_count
-        std = np.sqrt(2./((1+self.leaky_relu_alpha**2)*n))
-        self.W = theano.shared(np.cast[theano.config.floatX](np.random.normal(0, std, self.filter_shape)), borrow=True)
+        if self.irange is None:
+            std = np.sqrt(2./((1+self.leaky_relu_alpha**2)*n))
+            self.W = theano.shared(np.cast[theano.config.floatX](np.random.normal(0, std, self.filter_shape)),
+                                   borrow=True)
+        else:
+            self.W = theano.shared(np.cast[theano.config.floatX](np.random.uniform(-self.irange, self.irange,
+                                                                 self.filter_shape)), borrow=True)
         if self.train_bias:
             self.b = theano.shared(np.zeros((1, self.features_count, out_image_size, out_image_size),
                                             dtype=theano.config.floatX),
@@ -295,9 +301,11 @@ class ConvolutionalLayer(ForwardPropogator):
 
 
 class MaxPool(ForwardPropogator):
-    def __init__(self, window, stride=(1, 1)):
+    def __init__(self, window, stride=None):
         self.window = window
         self.stride = stride
+        if self.stride is None:
+            self.stride = self.window
 
     def setup_input(self, input_shape):
         assert len(input_shape) == 3

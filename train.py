@@ -40,7 +40,7 @@ class Logger(object):
 
 
 # image size
-s = 98
+s = 64
 BATCH_SIZE = 100
 
 med_r = [[0], [3]*1 + [2]*2 + [1]*4 + [0]*8]
@@ -84,30 +84,24 @@ for exp_name in exp_names:
                            axes=trn.view_converter.axes,
                            dtype='float32')
 
-    if os.path.isfile(model_save_path):
+    if os.path.isfile(model_save_path+'=='):
         print('Loading model from %s' % model_save_path)
         mdl = push_monitor(serial.load(model_save_path), 'monitor')
         # mdl = serial.load(model_save_path)
     else:
         c16 = mlp.ConvRectifiedLinear(output_channels=16,
                                       kernel_shape=(3, 3),
-                                      pool_shape=(3, 3),
-                                      pool_stride=(3, 3),
+                                      pool_shape=(2, 2),
+                                      pool_stride=(2, 2),
                                       layer_name='c16',
                                       irange=0.05)
         c32 = mlp.ConvRectifiedLinear(output_channels=32,
                                       kernel_shape=(3, 3),
-                                      pool_shape=(3, 3),
-                                      pool_stride=(3, 3),
+                                      pool_shape=(2, 2),
+                                      pool_stride=(2, 2),
                                       layer_name='c32',
                                       irange=0.05)
         c64 = mlp.ConvRectifiedLinear(output_channels=64,
-                                      kernel_shape=(3, 3),
-                                      pool_shape=(2, 2),
-                                      pool_stride=(2, 2),
-                                      layer_name='c64',
-                                      irange=0.05)
-        c6_ = mlp.ConvRectifiedLinear(output_channels=64,
                                       kernel_shape=(3, 3),
                                       pool_shape=(2, 2),
                                       pool_stride=(2, 2),
@@ -126,8 +120,8 @@ for exp_name in exp_names:
                                num_pieces=5,
                                max_col_norm=.9)
 
-        fc0 = mlp.RectifiedLinear(dim=1200,
-                                  layer_name='fc1200_0',
+        fc0 = mlp.RectifiedLinear(dim=1000,
+                                  layer_name='fc1000',
                                   irange=0.05,
                                   max_col_norm=1.9365,
                                   init_bias=0)
@@ -171,7 +165,6 @@ for exp_name in exp_names:
 
         layers = [c16, c32, c64,
                   fc0,
-                  fc1,
                   output]
         mdl = mlp.MLP(layers=layers,
                       input_space=in_space
@@ -187,9 +180,9 @@ for exp_name in exp_names:
     # print('dropout scales: ', dropout_scales)
 
 
-    trainer = sgd.SGD(learning_rate=6e-2,
+    trainer = sgd.SGD(learning_rate=1e-2,
                       batch_size=BATCH_SIZE,
-                      learning_rule=learning_rule.Momentum(.99, nesterov_momentum=True),
+                      learning_rule=learning_rule.Momentum(.5, nesterov_momentum=False),
                       # cost=Dropout(default_input_scale=1.,
                       #              # input_include_probs={exp_name: 0.5},
                       #              # input_scales={exp_name: 2.},

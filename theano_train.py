@@ -22,7 +22,8 @@ class Logger(object):
 
     def write(self, message):
         print(message)
-        self.log.write(time.strftime("%Y.%m.%d %H:%M:%S --- ") + message + "\n")
+        prefix = "" if message == '\n' else time.strftime("%Y.%m.%d %H:%M:%S --- ")
+        self.log.write(prefix + message + "\n")
 
     def close(self):
         self.log.close()
@@ -34,7 +35,7 @@ logger = Logger(logger_name)
 np.random.seed(1100)
 
 dtype_y = 'uint8'
-model_fn = 'last_model_scale_0.95-1.pkl'
+model_fn = 'last_model_50_full.pkl'
 
 unique_labels = read_labels()
 n_classes = len(unique_labels)
@@ -45,15 +46,19 @@ for lbl, idx in label_to_int.items():
         siphonophore_columns.append(idx)
 siphonophore_columns = np.array(siphonophore_columns)
 
-train_x, train_y = load_npys(which_set='train', image_size=98)
-valid_x, valid_y = load_npys(which_set='valid', image_size=98)
+img_size = 64
+max_offset = 1
+window = (img_size-2*max_offset, img_size-2*max_offset)
 
-train_y = train_y[:, siphonophore_columns]
-train_x = train_x[np.max(train_y, axis=1) == 1, :]
-train_y = train_y[np.max(train_y, axis=1) == 1, :]
-valid_y = valid_y[:, siphonophore_columns]
-valid_x = valid_x[np.max(valid_y, axis=1) == 1, :]
-valid_y = valid_y[np.max(valid_y, axis=1) == 1, :]
+train_x, train_y = load_npys(which_set='train', image_size=img_size)
+valid_x, valid_y = load_npys(which_set='valid', image_size=img_size)
+
+# train_y = train_y[:, siphonophore_columns]
+# train_x = train_x[np.max(train_y, axis=1) == 1, :]
+# train_y = train_y[np.max(train_y, axis=1) == 1, :]
+# valid_y = valid_y[:, siphonophore_columns]
+# valid_x = valid_x[np.max(valid_y, axis=1) == 1, :]
+# valid_y = valid_y[np.max(valid_y, axis=1) == 1, :]
 
 train_x = train_x.reshape((train_x.shape[0], 1, np.sqrt(train_x.shape[1]), np.sqrt(train_x.shape[1])))
 valid_x = valid_x.reshape((valid_x.shape[0], 1, np.sqrt(valid_x.shape[1]), np.sqrt(valid_x.shape[1])))
@@ -70,75 +75,89 @@ if os.path.isfile(model_fn):
 else:
     prelu_alpha = 0.25
     mlp = MLP([
-        ConvolutionalLayer((5, 5), 32, train_bias=True, pad=0, leaky_relu_alpha=1, max_kernel_norm=.9),
-        BatchNormalization(),
-        MaxPool((2, 2), (2, 2)),
-        PReLU(prelu_alpha),
+        # GaussianDropout(0.1),
+        ConvolutionalLayer((3, 3), 16, train_bias=True, pad=0),
+        # BatchNormalization(),
+        MaxPool((2, 2)),
+        # PReLU(prelu_alpha),
+        NonLinearity(),
 
         # GaussianDropout(0.5),
 
-        ConvolutionalLayer((3, 3), 64, train_bias=True, pad=0, leaky_relu_alpha=prelu_alpha, max_kernel_norm=1.9),
-        BatchNormalization(),
-        MaxPool((3, 3), (3, 3)),
-        PReLU(prelu_alpha),
+        # ConvolutionalLayer((3, 3), 32, train_bias=True, pad=1, leaky_relu_alpha=prelu_alpha, max_kernel_norm=1.9),
+        # BatchNormalization(),
+        # PReLU(prelu_alpha),
 
-        ConvolutionalLayer((3, 3), 128, train_bias=True, pad=0, leaky_relu_alpha=prelu_alpha, max_kernel_norm=1.9),
-        BatchNormalization(),
-        MaxPool((3, 3), (3, 3)),
-        PReLU(prelu_alpha),
+        ConvolutionalLayer((3, 3), 32, train_bias=True, pad=0),
+        # BatchNormalization(),
+        MaxPool((2, 2)),
+        # PReLU(prelu_alpha),
+        NonLinearity(),
+
+        ConvolutionalLayer((3, 3), 64, train_bias=True, pad=0),
+        # BatchNormalization(),
+        MaxPool((2, 2)),
+        # PReLU(prelu_alpha),
+        NonLinearity(),
+        #
+        # ConvolutionalLayer((3, 3), 128, train_bias=True, pad=1, leaky_relu_alpha=prelu_alpha, max_kernel_norm=1.9),
+        # BatchNormalization(),
+        # MaxPool((2, 2), (2, 2)),
+        # PReLU(prelu_alpha),
 
         Flatten(),
 
-        # GaussianDropout(0.5),
-        DenseLayer(1000, leaky_relu_alpha=prelu_alpha, max_col_norm=1.9),
-        BatchNormalization(),
+        # # GaussianDropout(0.5),
+        # DenseLayer(1000, max_col_norm=1.9),
+        # # BatchNormalization(),
         # NonLinearity(),
-        PReLU(prelu_alpha),
+        # # PReLU(prelu_alpha),
 
-        GaussianDropout(1),
-        DenseLayer(1000, leaky_relu_alpha=prelu_alpha, max_col_norm=1.9),
-        BatchNormalization(),
-        # NonLinearity(),
-        PReLU(prelu_alpha),
+        # GaussianDropout(1),
+        DenseLayer(1000, max_col_norm=1.9365),
+        # BatchNormalization(),
+        NonLinearity(),
+        # PReLU(prelu_alpha),
 
-        GaussianDropout(1),
-        DenseLayer(len_out, leaky_relu_alpha=prelu_alpha, max_col_norm=1.9),
-        BatchNormalization(),
+        # GaussianDropout(1),
+        DenseLayer(len_out, max_col_norm=1.9365),
+        # BatchNormalization(),
         NonLinearity(activation=T.nnet.softmax)
-    ], (1, 96, 96))
+    ], (1,) + window)
 
 
 
 ## TODO move to mlp.get_updates
 l2 = 0  # 1e-5
-learning_rate = np.exp(-2)
-momentum = 0.99
+learning_rate = 1e-2  # np.exp(-2)
+momentum = 0.9
 epoch_count = 1000
-batch_size = 50
+batch_size = 64
 minibatch_count = train_x.shape[0] // batch_size
-learning_decay = 0.5 ** (1./(400 * minibatch_count))
+learning_decay = 0.5 ** (1./(250 * minibatch_count))
 momentum_decay = 0.5 ** (1./(1000 * minibatch_count))
-lr_min = 1e-6
-mm_min = 0.6
-valid_rnd_count = 10
+lr_min = 1e-15
+mm_min = 0.5
+valid_rnd_count = 1
 
 method = 'nesterov'
 
 logger.write('batch=%d, l2=%f, method=%s\nlr=%f, lr_decay=%f,\nmomentum=%f, momentum_decay=%f' %
              (batch_size, l2, method, learning_rate, learning_decay, momentum, momentum_decay))
 
+scales = [1.01**(p*abs(p)) for p in map(lambda x: x/2., range(-7, 11))]
 
 randomization_params = {
-    'window': (96, 96),
-    'scales': [1.01**(p*abs(p)) for p in map(lambda x: x/2., range(-5, 1))],  # scales,
+    'window': window,
+    'scales': scales,
     'angles': range(360),
-    'x_offsets': range(2),
-    'y_offsets': range(2),
+    'x_offsets': range(max_offset+1),
+    'y_offsets': range(max_offset+1),
     # 'median_radii': [0, 0, 0, 1],
     # 'mean_radii': [0, 0, 0, 0, 1, 1, 2],
     'flip': True
 }
-pprint(randomization_params)
+print(randomization_params, file=logger)
 
 
 def randomize(dataset):
