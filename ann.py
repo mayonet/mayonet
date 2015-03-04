@@ -508,7 +508,7 @@ class MLP(ForwardPropogator):
 def Trainer(mlp, batch_size, learning_rate, train_X, train_y, valid_X=None, valid_y=None, method='sgd',
             momentum=0, lr_decay=1, lr_min=1e-9, l2=0, mm_decay=1, mm_min=1e-9,
             train_augmentation=identity, valid_augmentation=identity, valid_aug_count=1,
-            model_file_name=None, save_freq=None, epoch_count=None):
+            model_file_name=None, save_freq=None, save_in_different_files=False, epoch_count=None):
 
     floatX = theano.config.floatX
     minibatch_count = train_X.shape[0] // batch_size
@@ -594,6 +594,9 @@ def Trainer(mlp, batch_size, learning_rate, train_X, train_y, valid_X=None, vali
                 }
                 r_train_x = train_future.result()
             if save_freq is not None and save_freq > 0 and i % save_freq == 0:
-                cPickle.dump(mlp, open(model_file_name, 'wb'), protocol=cPickle.HIGHEST_PROTOCOL)
+                if save_in_different_files:
+                    cPickle.dump(mlp, open('%i_%s' % (i, model_file_name), 'wb'), protocol=cPickle.HIGHEST_PROTOCOL)
+                else:
+                    cPickle.dump(mlp, open(model_file_name, 'wb'), protocol=cPickle.HIGHEST_PROTOCOL)
 
     return trainer_func

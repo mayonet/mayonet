@@ -35,7 +35,7 @@ logger = Logger(logger_name)
 np.random.seed(1100)
 
 dtype_y = 'uint8'
-model_fn = 'last_model_50_full.pkl'
+model_fn = 'last_model_64_full.pkl'
 
 unique_labels = read_labels()
 n_classes = len(unique_labels)
@@ -69,58 +69,56 @@ valid_x = np.cast[floatX](1 - valid_x/255.)
 len_in = train_x.shape[1]
 len_out = train_y.shape[1]
 
-if os.path.isfile(model_fn):
+if os.path.isfile(model_fn) and False:
     logger.write('Loading model from %s...' % model_fn)
     mlp = cPickle.load(open(model_fn, 'rb'))
 else:
     prelu_alpha = 0.25
     mlp = MLP([
-        # GaussianDropout(0.1),
-        ConvolutionalLayer((3, 3), 16, train_bias=True, pad=0),
+        GaussianDropout(0.03),
+        ConvolutionalLayer((3, 3), 16, train_bias=True, pad=0, leaky_relu_alpha=1),
         # BatchNormalization(),
         MaxPool((2, 2)),
-        # PReLU(prelu_alpha),
         NonLinearity(),
-
-        # GaussianDropout(0.5),
-
-        # ConvolutionalLayer((3, 3), 32, train_bias=True, pad=1, leaky_relu_alpha=prelu_alpha, max_kernel_norm=1.9),
-        # BatchNormalization(),
-        # PReLU(prelu_alpha),
 
         ConvolutionalLayer((3, 3), 32, train_bias=True, pad=0),
         # BatchNormalization(),
+        NonLinearity(),
+
+        GaussianDropout(0.03),
+        ConvolutionalLayer((3, 3), 32, train_bias=True, pad=0),
+        # BatchNormalization(),
         MaxPool((2, 2)),
-        # PReLU(prelu_alpha),
+        NonLinearity(),
+
+        ConvolutionalLayer((3, 3), 64, train_bias=True, pad=1),
+        # BatchNormalization(),
         NonLinearity(),
 
         ConvolutionalLayer((3, 3), 64, train_bias=True, pad=0),
         # BatchNormalization(),
-        MaxPool((2, 2)),
-        # PReLU(prelu_alpha),
         NonLinearity(),
-        #
-        # ConvolutionalLayer((3, 3), 128, train_bias=True, pad=1, leaky_relu_alpha=prelu_alpha, max_kernel_norm=1.9),
+
+        ConvolutionalLayer((3, 3), 64, train_bias=True, pad=0),
         # BatchNormalization(),
-        # MaxPool((2, 2), (2, 2)),
-        # PReLU(prelu_alpha),
+        NonLinearity(),
+
+        GaussianDropout(0.03),
+        ConvolutionalLayer((3, 3), 64, train_bias=True, pad=0),
+        # BatchNormalization(),
+        MaxPool((2, 2)),
+        NonLinearity(),
 
         Flatten(),
 
-        # # GaussianDropout(0.5),
-        # DenseLayer(1000, max_col_norm=1.9),
-        # # BatchNormalization(),
-        # NonLinearity(),
-        # # PReLU(prelu_alpha),
-
-        # GaussianDropout(1),
-        DenseLayer(1000, max_col_norm=1.9365),
+        GaussianDropout(1),
+        DenseLayer(1400, max_col_norm=1.9365),
         # BatchNormalization(),
-        NonLinearity(),
-        # PReLU(prelu_alpha),
+        # NonLinearity(),
+        PReLU(prelu_alpha),
 
         # GaussianDropout(1),
-        DenseLayer(len_out, max_col_norm=1.9365),
+        DenseLayer(len_out, max_col_norm=1.9365, leaky_relu_alpha=prelu_alpha),
         # BatchNormalization(),
         NonLinearity(activation=T.nnet.softmax)
     ], (1,) + window)
@@ -128,9 +126,9 @@ else:
 
 
 ## TODO move to mlp.get_updates
-l2 = 0  # 1e-5
-learning_rate = 1e-2  # np.exp(-2)
-momentum = 0.9
+l2 = 0.0001  # 1e-5
+learning_rate = 3e-3  # np.exp(-2)
+momentum = 0.95
 epoch_count = 1000
 batch_size = 64
 minibatch_count = train_x.shape[0] // batch_size
@@ -166,7 +164,8 @@ def randomize(dataset):
 tr = Trainer(mlp, batch_size, learning_rate, train_x, train_y, valid_X=valid_x, valid_y=valid_y, method=method,
              momentum=momentum, lr_decay=learning_decay, lr_min=lr_min, l2=l2, mm_decay=momentum_decay, mm_min=mm_min,
              train_augmentation=randomize, valid_augmentation=randomize, valid_aug_count=valid_rnd_count,
-             model_file_name=model_fn, save_freq=1, epoch_count=epoch_count)
+             model_file_name=model_fn, save_freq=1, save_in_different_files=True, epoch_count=epoch_count)
+logger.write('#\tt_nll\tv_nll\ttime\trclass\tlearning rate\tmomentum\tl2_error')  # header
 for res in tr():
-    logger.write('{epoch}\t{train_nll:.5f}\t{test_nll:.5f}\t{epoch_time:.1f}s\t{valid_misclass:.2f}%%\t{lr}\t'
-                 '{momentum}\t{l2_error}'.format(**res))
+    logger.write('{epoch}\t{train_nll:.5f}\t{test_nll:.5f}\t{epoch_time:.1f}s\t{valid_misclass:.2f}%\t{lr:.10f}\t'
+                 '{momentum:.9f}\t{l2_error:.5f}'.format(**res))
