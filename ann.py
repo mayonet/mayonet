@@ -12,6 +12,7 @@ import itertools
 import cPickle
 from concurrent.futures import ProcessPoolExecutor
 import numpy as np
+import sys
 import theano
 from theano.sandbox.cuda.dnn import dnn_pool
 import theano.tensor as T
@@ -406,13 +407,14 @@ class Maxout(ForwardPropogator):
 
 
 class MLP(ForwardPropogator):
-    def __init__(self, layers, input_shape, verbose=True):
+    def __init__(self, layers, input_shape, logger=sys.stdout):
         self.layers = layers
         self.input_shape = input_shape
         s = input_shape
         for l in self.layers:
             outp = l.setup_input(s)
-            print('%s: %s -> %s' % (l.__class__.__name__, ','.join(map(str, s)), ','.join(map(str, outp))))
+            print('%s: %s -> %s' % (l.__class__.__name__, ','.join(map(str, s)), ','.join(map(str, outp))),
+                  file=logger)
             s = outp
         self.output_shape = s
 

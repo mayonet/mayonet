@@ -35,7 +35,7 @@ logger = Logger(logger_name)
 np.random.seed(1100)
 
 dtype_y = 'uint8'
-model_fn = 'last_model_64_full.pkl'
+model_fn = 'last_model_50_full.pkl'
 
 unique_labels = read_labels()
 n_classes = len(unique_labels)
@@ -46,7 +46,7 @@ for lbl, idx in label_to_int.items():
         siphonophore_columns.append(idx)
 siphonophore_columns = np.array(siphonophore_columns)
 
-img_size = 64
+img_size = 50
 max_offset = 1
 window = (img_size-2*max_offset, img_size-2*max_offset)
 
@@ -76,35 +76,34 @@ else:
     prelu_alpha = 0.25
     mlp = MLP([
         GaussianDropout(0.03),
-        ConvolutionalLayer((3, 3), 16, train_bias=True, pad=0, leaky_relu_alpha=1),
+        ConvolutionalLayer((4, 4), 32, train_bias=True, pad=0, leaky_relu_alpha=1),
         # BatchNormalization(),
         MaxPool((2, 2)),
-        NonLinearity(),
-
-        ConvolutionalLayer((3, 3), 32, train_bias=True, pad=0),
-        # BatchNormalization(),
         NonLinearity(),
 
         GaussianDropout(0.03),
-        ConvolutionalLayer((3, 3), 32, train_bias=True, pad=0),
-        # BatchNormalization(),
-        MaxPool((2, 2)),
-        NonLinearity(),
-
-        ConvolutionalLayer((3, 3), 64, train_bias=True, pad=1),
-        # BatchNormalization(),
-        NonLinearity(),
-
-        ConvolutionalLayer((3, 3), 64, train_bias=True, pad=0),
-        # BatchNormalization(),
-        NonLinearity(),
-
         ConvolutionalLayer((3, 3), 64, train_bias=True, pad=0),
         # BatchNormalization(),
         NonLinearity(),
 
         GaussianDropout(0.03),
         ConvolutionalLayer((3, 3), 64, train_bias=True, pad=0),
+        # BatchNormalization(),
+        MaxPool((2, 2)),
+        NonLinearity(),
+
+        GaussianDropout(0.03),
+        ConvolutionalLayer((2, 2), 128, train_bias=True, pad=0),
+        # BatchNormalization(),
+        NonLinearity(),
+
+        GaussianDropout(0.03),
+        ConvolutionalLayer((2, 2), 128, train_bias=True, pad=0),
+        # BatchNormalization(),
+        NonLinearity(),
+
+        GaussianDropout(0.03),
+        ConvolutionalLayer((2, 2), 128, train_bias=True, pad=0),
         # BatchNormalization(),
         MaxPool((2, 2)),
         NonLinearity(),
@@ -112,7 +111,13 @@ else:
         Flatten(),
 
         GaussianDropout(1),
-        DenseLayer(1400, max_col_norm=1.9365),
+        DenseLayer(1024, max_col_norm=1.9365),
+        # BatchNormalization(),
+        # NonLinearity(),
+        PReLU(prelu_alpha),
+
+        GaussianDropout(1),
+        DenseLayer(2048, max_col_norm=1.9365, leaky_relu_alpha=prelu_alpha),
         # BatchNormalization(),
         # NonLinearity(),
         PReLU(prelu_alpha),
@@ -121,7 +126,7 @@ else:
         DenseLayer(len_out, max_col_norm=1.9365, leaky_relu_alpha=prelu_alpha),
         # BatchNormalization(),
         NonLinearity(activation=T.nnet.softmax)
-    ], (1,) + window)
+    ], (1,) + window, logger)
 
 
 
