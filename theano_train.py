@@ -169,4 +169,4 @@ tr = Trainer(mlp, batch_size, learning_rate, train_x, train_y, valid_X=valid_x, 
              model_file_name=model_fn, save_freq=1, epoch_count=epoch_count)
 for res in tr():
     logger.write('{epoch}\t{train_nll:.5f}\t{test_nll:.5f}\t{epoch_time:.1f}s\t{valid_misclass:.2f}%%\t{lr}\t'
-                 '{momentum}'.format(**res))
+                 '{momentum}\t{l2_error}'.format(**res))

@@ -318,6 +318,7 @@ class MaxPool(ForwardPropogator):
 
     def forward(self, X, train=False):
         return dnn_pool(X, ws=self.window, stride=self.stride)
+        # from theano.tensor.signal.downsample import max_pool_2d
         # return max_pool_2d(X, ds=self.window)
 
 
@@ -423,10 +424,10 @@ class MLP(ForwardPropogator):
     def get_params(self):
         return chain(*[L.get_params() for L in self.layers])
 
-    def updates(self, cost, X, momentum=1.0, learning_rate=0.05, method='momentum'):
+    def updates(self, cost, l2_error, X, momentum=1.0, learning_rate=0.05, method='momentum', l2=0):
         updates = OrderedDict()
         for p, l2scale in self.get_params():
-            grad = T.grad(cost, p)
+            grad = T.grad(cost + l2*l2_error, p)
             if method == 'sgd':
                 updates[p] = p - learning_rate*grad
             elif method == 'adagrad':
@@ -489,12 +490,18 @@ class MLP(ForwardPropogator):
     # def nag_updates(self, cost, X, momentum=1.0, learning_rate=0.05):
     #     return self.sgd_updates(cost, X, momentum, learning_rate, method='nesterov')
 
-    def nll(self, X, Y, l2=0, train=False):
+    def nll(self, X, Y, train=False):
         Y1 = self.forward(X, train)
         Y1 = T.maximum(Y1, 1e-15)
-        L = -T.sum(T.log(Y1) * Y) / Y.shape[0]
+        return -T.sum(T.log(Y1) * Y) / Y.shape[0]
+
+    def l2_error(self):
+        L = None
         for p, l2scale in self.get_params():
-            L += T.sum(l2scale * l2 * p * p / 2)
+            if L is None:
+                L = T.sum(l2scale * p * p / 2)
+            else:
+                L += T.sum(l2scale * p * p / 2)
         return L
 
 
@@ -508,7 +515,8 @@ def Trainer(mlp, batch_size, learning_rate, train_X, train_y, valid_X=None, vali
     X = T.tensor4('X4', dtype=floatX)
     Y = T.matrix('Y', dtype=train_y.dtype)
     prob = mlp.forward(X)
-    cost = mlp.nll(X, Y, l2, train=True)
+    cost = mlp.nll(X, Y, train=True)
+    l2_error = mlp.l2_error()
 
     if valid_X is None:
         valid_X = train_X
@@ -516,14 +524,12 @@ def Trainer(mlp, batch_size, learning_rate, train_X, train_y, valid_X=None, vali
         valid_y = train_y
 
     misclass = theano.function([X, Y], T.eq(T.argmax(prob, axis=1), T.argmax(Y, axis=1)))
-
-    nll = theano.function([X, Y], mlp.nll(X, Y, l2, train=False))
-
-
+    nll = theano.function([X, Y], mlp.nll(X, Y, train=False))
+    calc_l2_error = theano.function([], l2_error)
 
     lr = theano.shared(np.array(learning_rate, dtype=floatX))
     mm = theano.shared(np.array(momentum, dtype=floatX))
-    updates = mlp.updates(cost, X, momentum=mm, learning_rate=lr, method=method)
+    updates = mlp.updates(cost, l2_error, X, momentum=mm, learning_rate=lr, method=method, l2=l2)
     updates[lr] = T.maximum(lr * lr_decay, lr_min)
     updates[mm] = T.maximum(mm * mm_decay, mm_min)
 
@@ -556,6 +562,7 @@ def Trainer(mlp, batch_size, learning_rate, train_X, train_y, valid_X=None, vali
                     batch_nll = float(train_model(batch_x, batch_y))
                     batch_nlls.append(batch_nll)
                 train_nll = np.mean(batch_nlls)
+                current_l2_error = calc_l2_error()*l2
                 del r_train_x  # Try to free up some memory
 
                 test_nlls = []
@@ -583,6 +590,7 @@ def Trainer(mlp, batch_size, learning_rate, train_X, train_y, valid_X=None, vali
                     'valid_misclass': valid_misclass,
                     'lr': float(lr.get_value()),
                     'momentum': float(mm.get_value()),
+                    'l2_error': current_l2_error
                 }
                 r_train_x = train_future.result()
             if save_freq is not None and save_freq > 0 and i % save_freq == 0:

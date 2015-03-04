@@ -126,67 +126,18 @@ print('batch=%d, l2=%f, method=%s\nlr=%f, lr_decay=%f,\nmomentum=%f, momentum_de
       (batch_size, l2, method, learning_rate, learning_decay, momentum, momentum_decay))
 
 
+tr = Trainer(mlp, batch_size, learning_rate, train_x, train_y, valid_X=valid_x, valid_y=valid_y, method=method,
+             momentum=momentum, lr_decay=learning_decay, lr_min=lr_min, l2=l2, mm_decay=momentum_decay, mm_min=mm_min,
+             model_file_name='mnist.pkl', save_freq=1, epoch_count=epoch_count)
 
-X = T.tensor4('X4', dtype=floatX)
-X.tag.test_value = valid_x[0:1]
-Y = T.matrix('Y', dtype=dtype_y)
+train_start = time.time()
+for res in tr():
+    print('{epoch}\t{train_nll:.5f}\t{test_nll:.5f}\t{epoch_time:.1f}s\t{valid_misclass:.2f}%%\t{lr}\t'
+                 '{momentum}\t{l2_error}'.format(**res))
 
-prob = mlp.forward(X)
-cost = mlp.nll(X, Y, l2, train=True)
-
-misclass = theano.function([X, Y], T.eq(T.argmax(prob, axis=1), T.argmax(Y, axis=1)))
-
-nll = theano.function([X, Y], mlp.nll(X, Y, l2, train=False))
-
-
-
-lr = theano.shared(np.array(learning_rate, dtype=floatX))
-mm = theano.shared(np.array(momentum, dtype=floatX))
-updates = mlp.updates(cost, X, momentum=mm, learning_rate=lr, method=method)
-updates[lr] = T.maximum(lr * learning_decay, lr_min)
-updates[mm] = T.maximum(mm * momentum_decay, mm_min)
-
-train_model = theano.function(
-    inputs=[X, Y],
-    outputs=cost,
-    updates=updates
-)
-
-
-indexes = np.arange(train_x.shape[0])
-train_start = time()
-for i in range(epoch_count):
-    epoch_start_time = time()
-    np.random.shuffle(indexes)
-    batch_nlls = []
-    for b in range(minibatch_count):
-        k = indexes[b * batch_size:(b + 1) * batch_size]
-        batch_x = train_x[k]
-        batch_y = train_y[k]
-        batch_nll = float(train_model(batch_x, batch_y))
-        batch_nlls.append(batch_nll)
-    train_nll = np.mean(batch_nlls)
-    test_nlls = []
-    valid_misclasses = []
-    for vb in range(valid_x.shape[0] // batch_size):
-        k = range(vb * batch_size, (vb + 1) * batch_size)
-        batch_x = valid_x[k]
-        batch_y = valid_y[k]
-        batch_nll = float(nll(batch_x, batch_y))
-        test_nlls.append(batch_nll)
-        batch_misclass = misclass(batch_x, batch_y) * 100
-        valid_misclasses.append(batch_misclass)
-    test_nll = np.mean(test_nlls)
-    valid_misclass = np.mean(valid_misclasses)
-    epoch_time = time() - epoch_start_time
-    print('%d\t%.5f\t%.5f\t%.1fs\t%.2f%%\t%f\t%f' % (i, train_nll, test_nll, epoch_time, valid_misclass,
-                                                     lr.get_value(), mm.get_value()))
-total_spent_time = time() - train_start
+total_spent_time = time.time() - train_start
 print('Trained %d epochs in %.1f seconds (%.2f seconds in average)' % (epoch_count, total_spent_time,
                                                                        total_spent_time / epoch_count))
-# mc = '%.1f%%' % (misclass(test_x, test_y)*100)
-# print(mc)
-
 
 
 
