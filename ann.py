@@ -14,7 +14,22 @@ from concurrent.futures import ProcessPoolExecutor
 import numpy as np
 import sys
 import theano
-from theano.sandbox.cuda.dnn import dnn_pool
+
+pool_2d = None
+try:
+    from theano.sandbox.cuda.dnn import dnn_pool
+    pool_2d = dnn_pool
+except ImportError:
+    print("Failed to load 'theano.sandbox.cuda.dnn.dnn_pool'. Loading 'theano.tensor.signal.downsample.max_pool_2d'",
+          file=sys.stderr)
+    from theano.tensor.signal.downsample import max_pool_2d
+
+    def p_2d(X, ws=(2, 2), stride=None):
+        if (stride is not None) and (stride != ws):
+            raise RuntimeWarning('theano version of pooling doesn''t support stride other than pool shape')
+        return max_pool_2d(X, ds=ws)
+    pool_2d = p_2d
+
 import theano.tensor as T
 from theano.tensor.nnet import conv2d
 import time
@@ -318,9 +333,7 @@ class MaxPool(ForwardPropogator):
         return ()
 
     def forward(self, X, train=False):
-        return dnn_pool(X, ws=self.window, stride=self.stride)
-        # from theano.tensor.signal.downsample import max_pool_2d
-        # return max_pool_2d(X, ds=self.window)
+        return pool_2d(X, ws=self.window, stride=self.stride)
 
 
 class Flatten(ForwardPropogator):
