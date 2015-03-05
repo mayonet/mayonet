@@ -39,11 +39,20 @@ def LeakyReLU(alpha):
 ##################################
 #  Helpers
 ##################################
+def calc_norm_numpy(np_W):
+    if np_W.ndim == 2:  # DenseLayer case
+        return np.sqrt(np.sum(np_W**2, axis=0))
+    elif np_W.ndim == 4:  # ConvolutionalLayer case
+        return np.sqrt(np.sum(np_W**2, axis=(1, 2, 3)))
+    else:
+        raise RuntimeError('calc_norm_numpy() works for Dense or Convolutional layers only')
+
 
 def col_normalize(W, max_col_norm):
     col_norms = T.sqrt(T.sum(T.sqr(W), axis=0))
     desired_norms = T.clip(col_norms, 0, max_col_norm)
     return W * desired_norms / (1e-7 + col_norms)
+
 
 def kernel_normalize(W, max_kernel_norm):
     kernel_norms = T.sqrt(T.sum(T.sqr(W), axis=(1, 2, 3)))
@@ -68,6 +77,27 @@ class ForwardPropogator:
 
     def self_update(self, X, updates):
         pass
+
+
+class Parallel(ForwardPropogator):
+    def __init__(self, propogators):
+        self.propogators = propogators
+
+    def setup_input(self, input_shapes):
+        res = 0
+        for fprop, input_shape in zip(self.propogators, input_shapes):
+            res += np.prod(fprop.setup_input(input_shape))
+        return res,
+
+    def forward(self, Xs, train=False):
+        return T.concatenate([fprop.forward(X, train) for fprop, X in zip(self.propogators, Xs)], axis=1)
+
+    def get_params(self):
+        return chain(*(fprop.get_params() for fprop in self.propogators))
+
+    def self_update(self, Xs, updates):
+        for fprop, X in zip(self.propogators, Xs):
+            fprop.self_update(X, updates)
 
 
 class DenseLayer(ForwardPropogator):
@@ -165,6 +195,10 @@ class BatchNormalization(ForwardPropogator):
         if train:
             mean = T.mean(X, axis=0, keepdims=True)*self.alpha + mean*(1-self.alpha)
             var = T.var(X, axis=0, keepdims=True)*self.alpha + var*(1-self.alpha)
+        else:
+            mean = T.mean(X, axis=0, keepdims=True)*0.5 + mean*0.5
+            var = T.var(X, axis=0, keepdims=True)*0.5 + var*0.5
+
         normalized_X = (X - mean) / T.sqrt(var + self.eps)
         return normalized_X * self.gamma + self.beta
 
@@ -407,18 +441,26 @@ class Maxout(ForwardPropogator):
 
 
 class MLP(ForwardPropogator):
-    def __init__(self, layers, input_shape, logger=sys.stdout):
+    def __init__(self, layers, input_shape=None, logger=sys.stdout):
         self.layers = layers
-        self.input_shape = input_shape
+        self.logger = logger
+        if input_shape is not None:
+            self.input_shape = input_shape
+            self.setup_input(self.input_shape)
+
+    def setup_input(self, input_shape):
         s = input_shape
         for l in self.layers:
             outp = l.setup_input(s)
             print('%s: %s -> %s' % (l.__class__.__name__, ','.join(map(str, s)), ','.join(map(str, outp))),
-                  file=logger)
+                  file=self.logger)
             s = outp
         self.output_shape = s
+        return self.output_shape
 
     def forward(self, X, train=False):
+        if isinstance(X, (list, tuple)) and len(X) == 1:
+            X = X[0]
         for l in self.layers:
             X = l.forward(X, train)
         return X
@@ -484,68 +526,87 @@ class MLP(ForwardPropogator):
                 updates[p] = p + updates[vel]
             else:
                 raise AssertionError('invalid method: %s' % method)
+        self.self_update(X, updates)
+        return updates
+
+    def self_update(self, X, updates):
+        if isinstance(X, (list, tuple)) and len(X) == 1:
+            X = X[0]
         for l in self.layers:
             l.self_update(X, updates)
             X = l.forward(X, train=True)
-        return updates
+
 
     # def nag_updates(self, cost, X, momentum=1.0, learning_rate=0.05):
     #     return self.sgd_updates(cost, X, momentum, learning_rate, method='nesterov')
 
-    def nll(self, X, Y, train=False):
-        Y1 = self.forward(X, train)
-        Y1 = T.maximum(Y1, 1e-15)
-        return -T.sum(T.log(Y1) * Y) / Y.shape[0]
 
-    def l2_error(self):
-        L = None
-        for p, l2scale in self.get_params():
-            if L is None:
-                L = T.sum(l2scale * p * p / 2)
-            else:
-                L += T.sum(l2scale * p * p / 2)
-        return L
+def neg_log_likelihood(mlp, X, Y, train=False):
+    Y1 = mlp.forward(X, train)
+    Y1 = T.maximum(Y1, 1e-15)
+    return -T.sum(T.log(Y1) * Y) / Y.shape[0]
 
 
-def Trainer(mlp, batch_size, learning_rate, train_X, train_y, valid_X=None, valid_y=None, method='sgd',
+def models_l2_error(mlp):
+    L = None
+    for p, l2scale in mlp.get_params():
+        if L is None:
+            L = T.sum(l2scale * p * p / 2)
+        else:
+            L += T.sum(l2scale * p * p / 2)
+    return L
+
+
+def Trainer(model, batch_size, learning_rate, train_X, train_y, valid_X=None, valid_y=None, method='sgd',
             momentum=0, lr_decay=1, lr_min=1e-9, l2=0, mm_decay=1, mm_min=1e-9,
             train_augmentation=identity, valid_augmentation=identity, valid_aug_count=1,
             model_file_name=None, save_freq=None, save_in_different_files=False, epoch_count=None):
 
     floatX = theano.config.floatX
-    minibatch_count = train_X.shape[0] // batch_size
-    X = T.tensor4('X4', dtype=floatX)
+    minibatch_count = train_y.shape[0] // batch_size
+    if not isinstance(train_X, tuple):
+        train_X = train_X,
+        valid_X = valid_X,
+
+    X = []
+    for tr in train_X:
+        if tr.ndim == 2:
+            X.append(T.matrix('X', dtype=floatX))
+        elif tr.ndim == 4:
+            X.append(T.tensor4('X', dtype=floatX))
+        else:
+            raise RuntimeError('Only input with ndim in (2,4) is allowed')
     Y = T.matrix('Y', dtype=train_y.dtype)
-    prob = mlp.forward(X)
-    cost = mlp.nll(X, Y, train=True)
-    l2_error = mlp.l2_error()
+    prob = model.forward(X)
+    cost = neg_log_likelihood(model, X, Y, train=True)
+    l2_error = models_l2_error(model)
 
     if valid_X is None:
         valid_X = train_X
     if valid_y is None:
         valid_y = train_y
 
-    misclass = theano.function([X, Y], T.eq(T.argmax(prob, axis=1), T.argmax(Y, axis=1)))
-    nll = theano.function([X, Y], mlp.nll(X, Y, train=False))
+    misclass = theano.function(X + [Y], T.eq(T.argmax(prob, axis=1), T.argmax(Y, axis=1)))
+    nll = theano.function(X + [Y], neg_log_likelihood(model, X, Y, train=False))
     calc_l2_error = theano.function([], l2_error)
 
     lr = theano.shared(np.array(learning_rate, dtype=floatX))
     mm = theano.shared(np.array(momentum, dtype=floatX))
-    updates = mlp.updates(cost, l2_error, X, momentum=mm, learning_rate=lr, method=method, l2=l2)
+    updates = model.updates(cost, l2_error, X, momentum=mm, learning_rate=lr, method=method, l2=l2)
     updates[lr] = T.maximum(lr * lr_decay, lr_min)
     updates[mm] = T.maximum(mm * mm_decay, mm_min)
 
     train_model = theano.function(
-        inputs=[X, Y],
+        inputs=X + [Y],
         outputs=cost,
         updates=updates
     )
 
     def trainer_func():
         r_train_x = train_augmentation(train_X)
-        indexes = np.arange(train_X.shape[0])
+        indexes = np.arange(train_y.shape[0])
         best_v_nll = 2.
-        if epoch_count is None:
+        if epoch_count is not None:
             iterator = range(epoch_count)
         else:
             iterator = itertools.count()
@@ -559,46 +620,54 @@ def Trainer(mlp, batch_size, learning_rate, train_X, train_y, valid_X=None, vali
                 batch_nlls = []
                 for b in range(minibatch_count):
                     k = indexes[b * batch_size:(b + 1) * batch_size]
-                    batch_x = r_train_x[k]
+                    batch_x = [d[k] for d in r_train_x]
                     batch_y = train_y[k]
-                    batch_nll = float(train_model(batch_x, batch_y))
+                    batch_nll = float(train_model(*batch_x + [batch_y]))
                     batch_nlls.append(batch_nll)
                 train_nll = np.mean(batch_nlls)
-                current_l2_error = calc_l2_error()*l2
                 del r_train_x  # Try to free up some memory
 
                 test_nlls = []
                 valid_misclasses = []
                 for r_valid_x in valid_futures:
-                    for vb in range(valid_X.shape[0] // batch_size):
+                    for vb in range(valid_y.shape[0] // batch_size):
                         k = range(vb * batch_size, (vb + 1) * batch_size)
-                        batch_x = r_valid_x[k]
+                        batch_x = [d[k] for d in r_valid_x]
                         batch_y = valid_y[k]
-                        batch_nll = float(nll(batch_x, batch_y))
+                        batch_nll = float(nll(*batch_x + [batch_y]))
                         test_nlls.append(batch_nll)
-                        batch_misclass = misclass(batch_x, batch_y) * 100
+                        batch_misclass = misclass(*batch_x + [batch_y]) * 100
                         valid_misclasses.append(batch_misclass)
                 test_nll = np.mean(test_nlls)
-                if test_nll < best_v_nll:
+                if (test_nll < best_v_nll) and (model_file_name is not None):
                     best_v_nll = test_nll
-                    cPickle.dump(mlp, open('best_' + model_file_name, 'wb'), protocol=cPickle.HIGHEST_PROTOCOL)
+                    cPickle.dump(model, open('best_' + model_file_name, 'wb'), protocol=cPickle.HIGHEST_PROTOCOL)
                 valid_misclass = np.mean(valid_misclasses)
                 epoch_time = time.time() - epoch_start_time
-                yield {
-                    'epoch': i,
-                    'train_nll': train_nll,
-                    'test_nll': test_nll,
-                    'epoch_time': epoch_time,
-                    'valid_misclass': valid_misclass,
-                    'lr': float(lr.get_value()),
-                    'momentum': float(mm.get_value()),
-                    'l2_error': current_l2_error
-                }
+
+                layer_info = OrderedDict()
+                for L_id, L in enumerate(model.layers):
+                    l_name = '%d%s' % (L_id, L.__class__.__name__)
+                    if isinstance(L, DenseLayer) or isinstance(L, ConvolutionalLayer):
+                        layer_info[l_name + '_max_norm'] = np.max(calc_norm_numpy(L.W.get_value()))
+                        layer_info[l_name + '_mean_norm'] = np.mean(calc_norm_numpy(L.W.get_value()))
+                        layer_info[l_name + '_min_norm'] = np.min(calc_norm_numpy(L.W.get_value()))
+                        layer_info[l_name + '_l2'] = np.sum(L.W.get_value()**2)
+                res = OrderedDict((('epoch', i),
+                                   ('epoch_time', epoch_time),
+                                   ('train_nll', train_nll),
+                                   ('test_nll', test_nll),
+                                   ('valid_misclass', valid_misclass),
+                                   ('lr', float(lr.get_value())),
+                                   ('momentum', float(mm.get_value())),
+                                   ('l2_error', calc_l2_error()*l2)))
+                res.update(layer_info)
+                yield res
                 r_train_x = train_future.result()
             if save_freq is not None and save_freq > 0 and i % save_freq == 0:
                 if save_in_different_files:
-                    cPickle.dump(mlp, open('%i_%s' % (i, model_file_name), 'wb'), protocol=cPickle.HIGHEST_PROTOCOL)
+                    cPickle.dump(model, open('%i_%s' % (i, model_file_name), 'wb'), protocol=cPickle.HIGHEST_PROTOCOL)
                 else:
-                    cPickle.dump(mlp, open(model_file_name, 'wb'), protocol=cPickle.HIGHEST_PROTOCOL)
+                    cPickle.dump(model, open(model_file_name, 'wb'), protocol=cPickle.HIGHEST_PROTOCOL)
 
     return trainer_func

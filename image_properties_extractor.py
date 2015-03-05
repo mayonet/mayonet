@@ -38,56 +38,54 @@ def get_max_area(filename):
     region_list = get_image_region_list(filename)
 
     max_area = None
+    region_count = 0
     for prop in region_list:
+        region_count += 1
         if max_area is None:
             max_area = prop
         else:
             if prop.area > max_area.area:
                 max_area = prop
-    return max_area
+    return max_area, region_count
 
 
 def get_max_area_dict(file_name, folder=None):
-    prop = get_max_area(file_name)
+    prop, region_count = get_max_area(file_name)
 
-    if prop is None:
-        max_area_dict = OrderedDict((('class', folder),
-                                     ('file_name', os.path.basename(file_name)),
-                                     ('area', 0)))
-    else:
-        max_area_dict = OrderedDict((('class', folder),
-                                     ('file_name', os.path.basename(file_name)),
-                                     ('label',  prop.label),
-                                     ('centroid_row', prop.centroid[0]),  # 0D:  location
-                                     ('centroid_col', prop.centroid[1]),
-                                     ('diameter_equivalent', prop.equivalent_diameter),  # 1D
-                                     ('length_minor_axis', prop.minor_axis_length),
-                                     ('length_major_axis', prop.major_axis_length),
-                                     ('ratio_eccentricity', prop.eccentricity),
-                                     ('perimeter', prop.perimeter),
-                                     ('orientation', prop.orientation),  # ranges from -pi/2 to pi/2
-                                     ('area', prop.area),  # 2D
-                                     ('area_convex', prop.convex_area),
-                                     ('area_filled', prop.filled_area),
-                                     ('box_min_row', prop.bbox[0]),
-                                     ('box_max_row', prop.bbox[2]),
-                                     ('box_min_col', prop.bbox[1]),
-                                     ('box_max_col', prop.bbox[3]),
-                                     ('ratio_extent', prop.extent),
-                                     ('ratio_solidity', prop.solidity),
-                                     ('inertia_tensor_eigenvalue1', prop.inertia_tensor_eigvals[0]),
-                                     ('inertia_tensor_eigenvalue2', prop.inertia_tensor_eigvals[1]),
-                                     ('moments_hu1', prop.moments_hu[0]),  # translation, scale and rotation invariant
-                                     ('moments_hu2', prop.moments_hu[1]),
-                                     ('moments_hu3', prop.moments_hu[2]),
-                                     ('moments_hu4', prop.moments_hu[3]),
-                                     ('moments_hu5', prop.moments_hu[4]),
-                                     ('moments_hu6', prop.moments_hu[5]),
-                                     ('moments_hu7', prop.moments_hu[6]),
+    max_area_dict = OrderedDict((('class', folder),
+                                 ('file_name', os.path.basename(file_name)),
+                                 ('reg_count', region_count),
+                                 # ('label', prop.label),
+                                 ('centroid_row', prop.centroid[0]),  # 0D:  location
+                                 ('centroid_col', prop.centroid[1]),
+                                 ('diameter_equivalent', prop.equivalent_diameter),  # 1D
+                                 ('length_minor_axis', prop.minor_axis_length),
+                                 ('length_major_axis', prop.major_axis_length),
+                                 ('ratio_eccentricity', prop.eccentricity),
+                                 ('perimeter', prop.perimeter),
+                                 # ('orientation', prop.orientation),  # ranges from -pi/2 to pi/2
+                                 ('area', prop.area),  # 2D
+                                 ('area_convex', prop.convex_area),
+                                 ('area_filled', prop.filled_area),
+                                 ('box_min_row', prop.bbox[0]),
+                                 ('box_max_row', prop.bbox[2]),
+                                 ('box_min_col', prop.bbox[1]),
+                                 ('box_max_col', prop.bbox[3]),
+                                 ('ratio_extent', prop.extent),
+                                 ('ratio_solidity', prop.solidity),
+                                 ('inertia_tensor_eigenvalue1', prop.inertia_tensor_eigvals[0]),
+                                 ('inertia_tensor_eigenvalue2', prop.inertia_tensor_eigvals[1]),
+                                 ('moments_hu1', prop.moments_hu[0]),  # translation, scale and rotation invariant
+                                 ('moments_hu2', prop.moments_hu[1]),
+                                 ('moments_hu3', prop.moments_hu[2]),
+                                 ('moments_hu4', prop.moments_hu[3]),
+                                 ('moments_hu5', prop.moments_hu[4]),
+                                 ('moments_hu6', prop.moments_hu[5]),
+                                 ('moments_hu7', prop.moments_hu[6]),
 
-                                     ('euler_number', prop.euler_number),  # miscellaneous
+                                 ('euler_number', prop.euler_number),  # miscellaneous
 
-                                     ('countCoords', len(prop.coords))))  # eventually grab these coordinates?
+                                 ('countCoords', len(prop.coords))))  # eventually grab these coordinates?
 
     return max_area_dict
 

@@ -21,9 +21,9 @@ class Logger(object):
         self.log = open(filename, "a", 0)
 
     def write(self, message):
-        print(message)
-        prefix = "" if message == '\n' else time.strftime("%Y.%m.%d %H:%M:%S --- ")
-        self.log.write(prefix + message + "\n")
+        if message != '\n':
+            print(message)
+            self.log.write(time.strftime("%Y.%m.%d %H:%M:%S --- ") + message + "\n")
 
     def close(self):
         self.log.close()
@@ -47,7 +47,7 @@ for lbl, idx in label_to_int.items():
 siphonophore_columns = np.array(siphonophore_columns)
 
 img_size = 50
-max_offset = 1
+max_offset = 0
 window = (img_size-2*max_offset, img_size-2*max_offset)
 
 train_x, train_y = load_npys(which_set='train', image_size=img_size)
@@ -76,55 +76,68 @@ else:
     prelu_alpha = 0.25
     mlp = MLP([
         GaussianDropout(0.03),
-        ConvolutionalLayer((4, 4), 32, train_bias=True, pad=0, leaky_relu_alpha=1),
-        # BatchNormalization(),
+        ConvolutionalLayer((4, 4), 32, train_bias=True, pad=0, leaky_relu_alpha=1, max_kernel_norm=0.9),
+        BatchNormalization(),
         MaxPool((2, 2)),
-        NonLinearity(),
+        # NonLinearity(),
+        PReLU(prelu_alpha),
 
         GaussianDropout(0.03),
-        ConvolutionalLayer((3, 3), 64, train_bias=True, pad=0),
-        # BatchNormalization(),
-        NonLinearity(),
+        ConvolutionalLayer((3, 3), 64, train_bias=True, pad=0, leaky_relu_alpha=prelu_alpha, max_kernel_norm=1.24),
+        BatchNormalization(),
+        # NonLinearity(),
+        PReLU(prelu_alpha),
 
         GaussianDropout(0.03),
-        ConvolutionalLayer((3, 3), 64, train_bias=True, pad=0),
-        # BatchNormalization(),
+        ConvolutionalLayer((3, 3), 64, train_bias=True, pad=1, leaky_relu_alpha=prelu_alpha, max_kernel_norm=1.24),
+        BatchNormalization(),
         MaxPool((2, 2)),
-        NonLinearity(),
+        # NonLinearity(),
+        PReLU(prelu_alpha),
 
         GaussianDropout(0.03),
-        ConvolutionalLayer((2, 2), 128, train_bias=True, pad=0),
-        # BatchNormalization(),
-        NonLinearity(),
+        ConvolutionalLayer((3, 3), 128, train_bias=True, pad=0, leaky_relu_alpha=prelu_alpha, max_kernel_norm=1.24),
+        BatchNormalization(),
+        # NonLinearity(),
+        PReLU(prelu_alpha),
 
         GaussianDropout(0.03),
-        ConvolutionalLayer((2, 2), 128, train_bias=True, pad=0),
-        # BatchNormalization(),
-        NonLinearity(),
+        ConvolutionalLayer((3, 3), 128, train_bias=True, pad=0, leaky_relu_alpha=prelu_alpha),
+        BatchNormalization(),
+        # NonLinearity(),
+        PReLU(prelu_alpha),
 
         GaussianDropout(0.03),
-        ConvolutionalLayer((2, 2), 128, train_bias=True, pad=0),
-        # BatchNormalization(),
-        MaxPool((2, 2)),
-        NonLinearity(),
+        ConvolutionalLayer((3, 3), 128, train_bias=True, pad=0, leaky_relu_alpha=prelu_alpha),
+        BatchNormalization(),
+        # NonLinearity(),
+        PReLU(prelu_alpha),
+
+        GaussianDropout(0.03),
+        ConvolutionalLayer((3, 3), 256, train_bias=True, pad=0, leaky_relu_alpha=prelu_alpha),
+        BatchNormalization(),
+        # NonLinearity(),
+        PReLU(prelu_alpha),
 
         Flatten(),
 
         GaussianDropout(1),
-        DenseLayer(1024, max_col_norm=1.9365),
-        # BatchNormalization(),
+        DenseLayer(2048, leaky_relu_alpha=prelu_alpha),
+        BatchNormalization(),
         # NonLinearity(),
         PReLU(prelu_alpha),
+        # Maxout(pieces=4),
 
         GaussianDropout(1),
-        DenseLayer(2048, max_col_norm=1.9365, leaky_relu_alpha=prelu_alpha),
-        # BatchNormalization(),
+        DenseLayer(2048, leaky_relu_alpha=prelu_alpha),
+        BatchNormalization(),
         # NonLinearity(),
         PReLU(prelu_alpha),
+        # Maxout(pieces=4),
 
         # GaussianDropout(1),
-        DenseLayer(len_out, max_col_norm=1.9365, leaky_relu_alpha=prelu_alpha),
-        # BatchNormalization(),
+        DenseLayer(len_out, max_col_norm=3.82, leaky_relu_alpha=prelu_alpha),
+        BatchNormalization(),
         NonLinearity(activation=T.nnet.softmax)
     ], (1,) + window, logger)
 
@@ -132,13 +145,13 @@ else:
 
 ## TODO move to mlp.get_updates
 l2 = 0.0001  # 1e-5
-learning_rate = 3e-3  # np.exp(-2)
+learning_rate = 1e-2  # np.exp(-2)
 momentum = 0.95
 epoch_count = 1000
 batch_size = 64
 minibatch_count = train_x.shape[0] // batch_size
-learning_decay = 0.5 ** (1./(250 * minibatch_count))
-momentum_decay = 0.5 ** (1./(1000 * minibatch_count))
+learning_decay = 1  # 0.5 ** (1./(250 * minibatch_count))
+momentum_decay = 1  # 0.5 ** (1./(1000 * minibatch_count))
 lr_min = 1e-15
 mm_min = 0.5
 valid_rnd_count = 1
@@ -168,9 +181,13 @@ def randomize(dataset):
 
 tr = Trainer(mlp, batch_size, learning_rate, train_x, train_y, valid_X=valid_x, valid_y=valid_y, method=method,
              momentum=momentum, lr_decay=learning_decay, lr_min=lr_min, l2=l2, mm_decay=momentum_decay, mm_min=mm_min,
-             train_augmentation=randomize, valid_augmentation=randomize, valid_aug_count=valid_rnd_count,
+             # train_augmentation=randomize, valid_augmentation=randomize, valid_aug_count=valid_rnd_count,
              model_file_name=model_fn, save_freq=1, save_in_different_files=True, epoch_count=epoch_count)
-logger.write('#\tt_nll\tv_nll\ttime\trclass\tlearning rate\tmomentum\tl2_error')  # header
-for res in tr():
-    logger.write('{epoch}\t{train_nll:.5f}\t{test_nll:.5f}\t{epoch_time:.1f}s\t{valid_misclass:.2f}%\t{lr:.10f}\t'
-                 '{momentum:.9f}\t{l2_error:.5f}'.format(**res))
+with open('monitors_%s.csv' % model_fn, 'w', 0) as monitor_csv:
+    logger.write('#\tt_nll\tv_nll\ttime\trclass\tlearning rate\tmomentum\tl2_error')  # header
+    for res in tr():
+        logger.write('{epoch}\t{train_nll:.5f}\t{test_nll:.5f}\t{epoch_time:.1f}s\t{valid_misclass:.2f}%\t{lr:.10f}\t'
+                     '{momentum:.9f}\t{l2_error:.5f}'.format(**res))
+        if res['epoch'] == 0:
+            print('\t'.join(res), file=monitor_csv)
+        print('\t'.join([str(v) for v in res.itervalues()]), file=monitor_csv)
