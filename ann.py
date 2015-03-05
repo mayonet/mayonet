@@ -14,7 +14,22 @@ from concurrent.futures import ProcessPoolExecutor
 import numpy as np
 import sys
 import theano
-from theano.sandbox.cuda.dnn import dnn_pool
+
+pool_2d = None
+try:
+    from theano.sandbox.cuda.dnn import dnn_pool
+    pool_2d = dnn_pool
+except ImportError:
+    print("Failed to load 'theano.sandbox.cuda.dnn.dnn_pool'. Loading 'theano.tensor.signal.downsample.max_pool_2d'",
+          file=sys.stderr)
+    from theano.tensor.signal.downsample import max_pool_2d
+
+    def p_2d(X, ws=(2, 2), stride=None):
+        if (stride is not None) and (stride != ws):
+            raise RuntimeWarning('theano version of pooling doesn''t support stride other than pool shape')
+        return max_pool_2d(X, ds=ws)
+    pool_2d = p_2d
+
 import theano.tensor as T
 from theano.tensor.nnet import conv2d
 import time
@@ -136,6 +151,23 @@ class DenseLayer(ForwardPropogator):
         if self.max_col_norm is not None:
             W = updates[self.W]
             updates[self.W] = col_normalize(W, self.max_col_norm)
+
+
+class DenseDecoder(ForwardPropogator):
+    def __init__(self, encoding_layer):
+        self.encoding_layer = encoding_layer
+
+    def get_params(self):
+        return ()
+
+    def setup_input(self, input_shape):
+        self.W_prime = self.encoding_layer.W.T
+        self.b_prime = theano.shared(np.zeros((1, self.encoding_layer.W.get_value().shape[0]), dtype=theano.config.floatX), borrow=True,
+                                     broadcastable=(True, False))
+        return self.encoding_layer.W.get_value().shape[:1]
+
+    def forward(self, X, train=False):
+        return T.dot(X, self.W_prime) + self.b_prime
 
 
 class PReLU(ForwardPropogator):
@@ -352,9 +384,7 @@ class MaxPool(ForwardPropogator):
         return ()
 
     def forward(self, X, train=False):
-        return dnn_pool(X, ws=self.window, stride=self.stride)
-        # from theano.tensor.signal.downsample import max_pool_2d
-        # return max_pool_2d(X, ds=self.window)
+        return pool_2d(X, ws=self.window, stride=self.stride)
 
 
 class Flatten(ForwardPropogator):
@@ -363,6 +393,21 @@ class Flatten(ForwardPropogator):
 
     def setup_input(self, input_shape):
         return np.prod(input_shape),
+
+    def get_params(self):
+        return ()
+
+
+class Reshape(ForwardPropogator):
+    def __init__(self, new_shape):
+        self.shape = new_shape
+
+    def setup_input(self, input_shape):
+        return self.shape
+
+    def forward(self, X, train=False):
+        batch_size = X.shape[0]
+        return T.reshape(X, (batch_size,) + self.shape)
 
     def get_params(self):
         return ()
