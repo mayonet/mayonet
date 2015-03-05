@@ -123,6 +123,23 @@ class DenseLayer(ForwardPropogator):
             updates[self.W] = col_normalize(W, self.max_col_norm)
 
 
+class DenseDecoder(ForwardPropogator):
+    def __init__(self, encoding_layer):
+        self.encoding_layer = encoding_layer
+
+    def get_params(self):
+        return ()
+
+    def setup_input(self, input_shape):
+        self.W_prime = self.encoding_layer.W.T
+        self.b_prime = theano.shared(np.zeros((1, self.encoding_layer.W.get_value().shape[0]), dtype=theano.config.floatX), borrow=True,
+                                     broadcastable=(True, False))
+        return self.encoding_layer.W.get_value().shape[:1]
+
+    def forward(self, X, train=False):
+        return T.dot(X, self.W_prime) + self.b_prime
+
+
 class PReLU(ForwardPropogator):
     def __init__(self, initial_alpha=0.25):
         self.initial_alpha = initial_alpha
@@ -342,6 +359,21 @@ class Flatten(ForwardPropogator):
 
     def setup_input(self, input_shape):
         return np.prod(input_shape),
+
+    def get_params(self):
+        return ()
+
+
+class Reshape(ForwardPropogator):
+    def __init__(self, new_shape):
+        self.shape = new_shape
+
+    def setup_input(self, input_shape):
+        return self.shape
+
+    def forward(self, X, train=False):
+        batch_size = X.shape[0]
+        return T.reshape(X, (batch_size,) + self.shape)
 
     def get_params(self):
         return ()
