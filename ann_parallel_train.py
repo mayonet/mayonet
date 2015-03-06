@@ -1,8 +1,9 @@
 #!/usr/bin/env python2
 from __future__ import division, print_function
+import pandas as pd
 import os
 from pprint import pprint
-from dataset import read_labels
+from dataset import read_labels, iterate_train_data_names
 from np_dataset import load_npys
 import theano
 # theano.config.compute_test_value = 'warn'
@@ -37,21 +38,21 @@ np.random.seed(1100)
 dtype_y = 'uint8'
 model_fn = 'last_model_50_full.pkl'
 
-unique_labels = read_labels()
-n_classes = len(unique_labels)
-label_to_int = {unique_labels[i]: i for i in range(n_classes)}
-siphonophore_columns = []
-for lbl, idx in label_to_int.items():
-    if lbl.startswith('siphonophore') or lbl.startswith('acantharia'):
-        siphonophore_columns.append(idx)
-siphonophore_columns = np.array(siphonophore_columns)
+# unique_labels = read_labels()
+# n_classes = len(unique_labels)
+# label_to_int = {unique_labels[i]: i for i in range(n_classes)}
+# siphonophore_columns = []
+# for lbl, idx in label_to_int.items():
+#     if lbl.startswith('siphonophore') or lbl.startswith('acantharia'):
+#         siphonophore_columns.append(idx)
+# siphonophore_columns = np.array(siphonophore_columns)
 
 img_size = 50
-max_offset = 0
+max_offset = 1
 window = (img_size-2*max_offset, img_size-2*max_offset)
 
-train_x, train_y, _ = load_npys(which_set='train', image_size=img_size)
-valid_x, valid_y, _ = load_npys(which_set='valid', image_size=img_size)
+train_x, train_y, train_names = load_npys(which_set='train', image_size=img_size)
+valid_x, valid_y, valid_names = load_npys(which_set='valid', image_size=img_size)
 
 # train_y = train_y[:, siphonophore_columns]
 # train_x = train_x[np.max(train_y, axis=1) == 1, :]
@@ -65,9 +66,39 @@ valid_x = valid_x.reshape((valid_x.shape[0], 1, np.sqrt(valid_x.shape[1]), np.sq
 train_x = np.cast[floatX](1 - train_x/255.)
 valid_x = np.cast[floatX](1 - valid_x/255.)
 
+csv_location = '/home/yoptar/git/subway-plankton/train_img_props.csv'
+pan_props = pd.read_csv(csv_location, sep='\t')
+
+# train_props = None
+# for name in train_names:
+#     prop = np.cast[floatX](pan_props[pan_props['file_name'] == name].drop(['class', 'file_name'], axis=1).values)
+#     if train_props is None:
+#         train_props = prop
+#     else:
+#         train_props = np.vstack((train_props, prop))
+# print('prepared train_props')
+train_props = np.load('/plankton/train_props.npy')
+
+# valid_props = None
+# for name in valid_names:
+#     prop = np.cast[floatX](pan_props[pan_props['file_name'] == name].drop(['class', 'file_name'], axis=1).values)
+#     if valid_props is None:
+#         valid_props = prop
+#     else:
+#         valid_props = np.vstack((valid_props, prop))
+# print('prepared valid_props')
+valid_props = np.load('/plankton/valid_props.npy')
+
+means = train_props.mean(axis=0)
+stds = np.std(train_props, axis=0)
+train_props = (train_props - means) / stds
+valid_props = (valid_props - means) / stds
 
 len_in = train_x.shape[1]
 len_out = train_y.shape[1]
+
+train_x = (train_x, train_props)
+valid_x = (valid_x, valid_props)
 
 if os.path.isfile(model_fn) and False:
     logger.write('Loading model from %s...' % model_fn)
@@ -75,82 +106,66 @@ if os.path.isfile(model_fn) and False:
 else:
     prelu_alpha = 0.25
     mlp = MLP([
-        GaussianDropout(0.03),
-        ConvolutionalLayer((4, 4), 32, train_bias=True, pad=0, leaky_relu_alpha=1, max_kernel_norm=0.9),
-        BatchNormalization(),
-        MaxPool((2, 2)),
-        # NonLinearity(),
-        PReLU(prelu_alpha),
+        Parallel([
+            MLP([
+                GaussianDropout(0.03),
+                ConvolutionalLayer((3, 3), 32, pad=1, leaky_relu_alpha=1),
+                MaxPool((2, 2)),
+                NonLinearity(),
 
-        GaussianDropout(0.03),
-        ConvolutionalLayer((3, 3), 64, train_bias=True, pad=0, leaky_relu_alpha=prelu_alpha, max_kernel_norm=1.24),
-        BatchNormalization(),
-        # NonLinearity(),
-        PReLU(prelu_alpha),
+                GaussianDropout(0.03),
+                ConvolutionalLayer((3, 3), 64),
+                NonLinearity(),
 
-        GaussianDropout(0.03),
-        ConvolutionalLayer((3, 3), 64, train_bias=True, pad=1, leaky_relu_alpha=prelu_alpha, max_kernel_norm=1.24),
-        BatchNormalization(),
-        MaxPool((2, 2)),
-        # NonLinearity(),
-        PReLU(prelu_alpha),
+                GaussianDropout(0.03),
+                ConvolutionalLayer((3, 3), 64),
+                MaxPool((2, 2)),
+                NonLinearity(),
 
-        GaussianDropout(0.03),
-        ConvolutionalLayer((3, 3), 128, train_bias=True, pad=0, leaky_relu_alpha=prelu_alpha, max_kernel_norm=1.24),
-        BatchNormalization(),
-        # NonLinearity(),
-        PReLU(prelu_alpha),
+                GaussianDropout(0.03),
+                ConvolutionalLayer((3, 3), 128),
+                NonLinearity(),
 
-        GaussianDropout(0.03),
-        ConvolutionalLayer((3, 3), 128, train_bias=True, pad=0, leaky_relu_alpha=prelu_alpha),
-        BatchNormalization(),
-        # NonLinearity(),
-        PReLU(prelu_alpha),
+                GaussianDropout(0.03),
+                ConvolutionalLayer((3, 3), 128),
+                MaxPool((2, 2)),
+                NonLinearity(),
 
-        GaussianDropout(0.03),
-        ConvolutionalLayer((3, 3), 128, train_bias=True, pad=0, leaky_relu_alpha=prelu_alpha),
-        BatchNormalization(),
-        # NonLinearity(),
-        PReLU(prelu_alpha),
+                Flatten(),
 
-        GaussianDropout(0.03),
-        ConvolutionalLayer((3, 3), 256, train_bias=True, pad=0, leaky_relu_alpha=prelu_alpha),
-        BatchNormalization(),
-        # NonLinearity(),
-        PReLU(prelu_alpha),
+                Dropout(0.5),
+                DenseLayer(1500),
+                NonLinearity()
+            ]),
+            MLP([
+                DenseLayer(1000),
+                NonLinearity(),
 
-        Flatten(),
+                Dropout(0.8),
+                DenseLayer(1000),
+                NonLinearity()
+            ])
+        ]),
 
-        GaussianDropout(1),
-        DenseLayer(2048, leaky_relu_alpha=prelu_alpha),
-        BatchNormalization(),
-        # NonLinearity(),
-        PReLU(prelu_alpha),
-        # Maxout(pieces=4),
+        Dropout(0.5),
+        DenseLayer(1500),
+        NonLinearity(),
 
-        GaussianDropout(1),
-        DenseLayer(2048, leaky_relu_alpha=prelu_alpha),
-        BatchNormalization(),
-        # NonLinearity(),
-        PReLU(prelu_alpha),
-        # Maxout(pieces=4),
-
-        # GaussianDropout(1),
-        DenseLayer(len_out, max_col_norm=3.82, leaky_relu_alpha=prelu_alpha),
-        BatchNormalization(),
+        Dropout(0.5),
+        DenseLayer(len_out),
         NonLinearity(activation=T.nnet.softmax)
-    ], (1,) + window, logger)
+    ], ((1,) + window, train_x[1].shape[1:]), logger=logger)
 
 
 
 ## TODO move to mlp.get_updates
-l2 = 0.0001  # 1e-5
+l2 = 0.0003  # 1e-5
 learning_rate = 1e-2  # np.exp(-2)
-momentum = 0.95
+momentum = 0.97
 epoch_count = 1000
-batch_size = 64
-minibatch_count = train_x.shape[0] // batch_size
-learning_decay = 1  # 0.5 ** (1./(250 * minibatch_count))
+batch_size = 100
+minibatch_count = train_y.shape[0] // batch_size
+learning_decay = 0.5 ** (1./(300 * minibatch_count))
 momentum_decay = 1  # 0.5 ** (1./(1000 * minibatch_count))
 lr_min = 1e-15
 mm_min = 0.5
@@ -177,11 +192,11 @@ print(randomization_params, file=logger)
 
 
 def randomize(dataset):
-    return randomize_dataset_bc01(dataset, **randomization_params)
+    return randomize_dataset_bc01(dataset[0], **randomization_params), dataset[1]
 
 tr = Trainer(mlp, batch_size, learning_rate, train_x, train_y, valid_X=valid_x, valid_y=valid_y, method=method,
              momentum=momentum, lr_decay=learning_decay, lr_min=lr_min, l2=l2, mm_decay=momentum_decay, mm_min=mm_min,
-             # train_augmentation=randomize, valid_augmentation=randomize, valid_aug_count=valid_rnd_count,
+             train_augmentation=randomize, valid_augmentation=randomize, valid_aug_count=valid_rnd_count,
              model_file_name=model_fn, save_freq=1, save_in_different_files=True, epoch_count=epoch_count)
 with open('monitors_%s.csv' % model_fn, 'w', 0) as monitor_csv:
     logger.write('#\tt_nll\tv_nll\ttime\trclass\tlearning rate\tmomentum\tl2_error')  # header

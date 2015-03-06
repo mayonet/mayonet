@@ -227,9 +227,6 @@ class BatchNormalization(ForwardPropogator):
         if train:
             mean = T.mean(X, axis=0, keepdims=True)*self.alpha + mean*(1-self.alpha)
             var = T.var(X, axis=0, keepdims=True)*self.alpha + var*(1-self.alpha)
-        else:
-            mean = T.mean(X, axis=0, keepdims=True)*0.5 + mean*0.5
-            var = T.var(X, axis=0, keepdims=True)*0.5 + var*0.5
 
         normalized_X = (X - mean) / T.sqrt(var + self.eps)
         return normalized_X * self.gamma + self.beta
