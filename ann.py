@@ -332,8 +332,8 @@ class ConvolutionalLayer(ForwardPropogator):
         """input_shape=('c', 0, 1)"""
         assert input_shape[-1] == input_shape[-2], 'image must be square'
         img_size = input_shape[-1]
-        channels = input_shape[0]
-        self.filter_shape = (self.features_count, channels) + self.window
+        self.channels = input_shape[0]
+        self.filter_shape = (self.features_count, self.channels) + self.window
 
         out_image_size = img_size+self.pad*2
         if self.border_mode == 'valid':
@@ -357,7 +357,8 @@ class ConvolutionalLayer(ForwardPropogator):
             self.params = (self.W, 1),
             self.b = 0
 
-        return self.features_count, out_image_size, out_image_size
+        self.output_shape = self.features_count, out_image_size, out_image_size
+        return self.output_shape
 
     def get_params(self):
         return self.params
