@@ -62,7 +62,7 @@ dense = DenseLayer(100)
 dae = MLP(
     [
         Flatten(),
-        Dropout(0.3),
+        Dropout(0.7),
         dense,
         NonLinearity(activation=T.nnet.sigmoid),
         DenseDecoder(dense),
@@ -74,8 +74,8 @@ dae = MLP(
 X = T.tensor4(dtype=floatX)
 rec = dae.forward(X, train=True)
 reconstruct = theano.function([X], rec)
-L = - T.sum(X * T.log(rec) + (1 - X) * T.log(1 - rec), axis=1)
-cost = T.mean(L)
+cost = - T.mean(T.sum(X * T.log(rec) + (1 - X) * T.log(1 - rec), axis=1))
+# cost = T.sum(T.sqr(X - rec)) / X.shape[0]
 
 updates = OrderedDict()
 learning_rate = theano.shared(np.array(100, dtype=floatX))
@@ -87,9 +87,9 @@ for p, l2 in dae.get_params():
     updates[p] = p + updates[vel]
 train = theano.function([X], cost, updates=updates)
 
-learning_rate.set_value(10)
+learning_rate.set_value(30)
 batch_size = 1000
-for epoch in range(10):
+for epoch in range(30):
     errors = []
     for b in range(train_x.shape[0] // batch_size):
         err = train(train_x[(b * batch_size):((b + 1) * batch_size)])

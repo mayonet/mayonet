@@ -154,16 +154,22 @@ class DenseLayer(ForwardPropogator):
 
 
 class DenseDecoder(ForwardPropogator):
-    def __init__(self, encoding_layer):
+    def __init__(self, encoding_layer, untied_bias=True):
         self.encoding_layer = encoding_layer
+        self.untied_bias = untied_bias
 
     def get_params(self):
-        return ()
+        return self.params
 
     def setup_input(self, input_shape):
         self.W_prime = self.encoding_layer.W.T
-        self.b_prime = theano.shared(np.zeros((1, self.encoding_layer.W.get_value().shape[0]), dtype=theano.config.floatX), borrow=True,
-                                     broadcastable=(True, False))
+        if self.untied_bias:
+            self.b_prime = theano.shared(np.zeros((1, self.encoding_layer.W.get_value().shape[0]), dtype=theano.config.floatX), borrow=True,
+                                         broadcastable=(True, False))
+            self.params = (self.b_prime, 0),
+        else:
+            self.b_prime = 0
+            self.params = ()
         return self.encoding_layer.W.get_value().shape[:1]
 
     def forward(self, X, train=False):
