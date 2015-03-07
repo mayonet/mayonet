@@ -404,7 +404,7 @@ def find_node(name, root_of_tree):
     return None
 
 
-def assign_probs(node, prob, override=True):
+def assign_probs(node, prob, parent_to_child_mult, child_to_parent_mult, override=True):
     if node.is_root():
         return
     if override or (node.prob is None):
@@ -413,20 +413,21 @@ def assign_probs(node, prob, override=True):
         return
 
     for c in node.children:
-        assign_probs(c, prob * parent_to_child_mult, False)
-    assign_probs(node.parent, prob * child_to_parent_mult, False)
+        assign_probs(c, prob * parent_to_child_mult, parent_to_child_mult, child_to_parent_mult, False)
+    assign_probs(node.parent, prob * child_to_parent_mult, parent_to_child_mult, child_to_parent_mult, False)
 
 # print(root)
 # assign_probs(find_node('siphonophore_partial', root), 1.0)
 # print(root)
 
-def heated_targetings(label_to_int, train_y, valid_y=None):
+def heated_targetings(label_to_int, train_y, valid_y=None,
+                      parent_to_child_mult=0.4, child_to_parent_mult=0.4, coldness=100):
     marginal_probs = train_y.sum(axis=0) / train_y.shape[0]
     tree = read_tree()
     probs_given_classes = []
     for lbl, yid in sorted(label_to_int.items(), key=itemgetter(1)):
         tree.reset_probs()
-        assign_probs(find_node(lbl, tree), heat)
+        assign_probs(find_node(lbl, tree), coldness, parent_to_child_mult, child_to_parent_mult)
         def assign_prior(node):
             if node.is_abstract():
                 return
