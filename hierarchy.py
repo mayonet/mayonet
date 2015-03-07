@@ -1,3 +1,9 @@
+from itertools import takewhile
+
+
+parent_to_child_mult=0.6
+child_to_parent_mult=0.6
+
 hierarchy = """ARTIFACTS
     artifacts_edge
     artifacts
@@ -314,5 +320,80 @@ UNKNOWN
     unknown_blobs_and_smudges
     unknown_sticks
 unknown_unclassified
-chordate_type1
-"""
+chordate_type1"""
+
+
+def count_tabs(line):
+    r"""Assumed that 4 spaces is a tab
+    >>> count_tabs("no-tabs")
+    0
+    >>> count_tabs("        two-tabs-before")
+    2
+    """
+    return (len(line) - len(line.lstrip())) // 4
+
+rows = [(line.strip(), count_tabs(line)) for line in my_hierarchy.split('\n') if line]
+
+
+class Node:
+    def __init__(self, name, parent):
+        self.children = []
+        self.parent = parent
+        self.name = name
+        self.prob = None
+
+    def __str__(self):
+        return self.to_string()
+
+    def to_string(self, prefix=''):
+        if self.children:
+            children = '\n'+'\n'.join(c.to_string(prefix+'  ') for c in self.children)
+        else:
+            children = ''
+        p = '' if self.prob is None else ' (%.3f)' % self.prob
+
+        return '%s%s%s%s' % (prefix, self.name, p, children)
+
+    def is_root(self):
+        return self.name == 'ROOT'
+
+
+root = Node('ROOT', None)
+last_nodes = {-1: root}
+for ln, cnt in rows:
+    parent = last_nodes[cnt - 1]
+    new_node = Node(ln, parent)
+    parent.children.append(new_node)
+    last_nodes[cnt] = new_node
+    # if (cnt == last_node_cnt + 1) or (cnt == last_node_cnt):
+    # print('delete', range(cnt+1, max(last_nodes.keys())))
+    for i in range(cnt+1, max(last_nodes.keys())):
+        if i in last_nodes:
+            del last_nodes[i]
+
+
+def find_node(name, root_of_tree):
+    if root_of_tree.name == name:
+        return root_of_tree
+    for c in root_of_tree.children:
+        found = find_node(name, c)
+        if found:
+            return found
+    return None
+
+
+def assign_probs(node, prob, override=True):
+    if node.is_root():
+        return
+    if override or (node.prob is None):
+        node.prob = prob
+    else:
+        return
+
+    for c in node.children:
+        assign_probs(c, prob * parent_to_child_mult, False)
+    assign_probs(node.parent, prob * child_to_parent_mult, False)
+
+# print(root)
+assign_probs(find_node('siphonophore_partial', root), 1.0)
+print(root)
