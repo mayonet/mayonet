@@ -94,24 +94,34 @@ class ForwardPropogator:
         pass
 
 
-class Parallel(ForwardPropogator):
+class LayerContainer:
+    def get_layers(self):
+        for prop in self.layers:
+            if isinstance(prop, LayerContainer):
+                for L in prop.get_layers():
+                    yield L
+            else:
+                yield prop
+
+
+class Parallel(ForwardPropogator, LayerContainer):
     def __init__(self, propogators):
-        self.propogators = propogators
+        self.layers = propogators
 
     def setup_input(self, input_shapes):
         res = 0
-        for fprop, input_shape in zip(self.propogators, input_shapes):
+        for fprop, input_shape in zip(self.layers, input_shapes):
             res += np.prod(fprop.setup_input(input_shape))
         return res,
 
     def forward(self, Xs, train=False):
-        return T.concatenate([fprop.forward(X, train) for fprop, X in zip(self.propogators, Xs)], axis=1)
+        return T.concatenate([fprop.forward(X, train) for fprop, X in zip(self.layers, Xs)], axis=1)
 
     def get_params(self):
-        return chain(*(fprop.get_params() for fprop in self.propogators))
+        return chain(*(fprop.get_params() for fprop in self.layers))
 
     def self_update(self, Xs, updates):
-        for fprop, X in zip(self.propogators, Xs):
+        for fprop, X in zip(self.layers, Xs):
             fprop.self_update(X, updates)
 
 
@@ -240,6 +250,56 @@ class NonLinearity(ForwardPropogator):
 
     def forward(self, X, train=False):
         return self.activation(X)
+
+
+class LCNNormalization(ForwardPropogator):
+    def __init__(self, kernel_size, threshold=1e-7, use_divisor=False):
+        def gaussian_filter(kernel_shape):
+
+            x = np.zeros((kernel_shape, kernel_shape), dtype='float32')
+
+            def gauss(x, y, sigma=2.0):
+                Z = 2 * np.pi * sigma**2
+                return 1./Z * np.exp(-(x**2 + y**2) / (2. * sigma**2))
+
+            mid = np.floor(kernel_shape/2.)
+            for i in xrange(0, kernel_shape):
+                for j in xrange(0, kernel_shape):
+                    x[i, j] = gauss(i-mid, j-mid)
+
+            return (x / sum(x)).reshape((1, 1, kernel_shape, kernel_shape))
+
+        self.kernel_size = kernel_size
+        self.filter_shape = (1, 1, kernel_size, kernel_size)
+        self.threshold = threshold
+        self.use_divisor = use_divisor
+        self.filter = theano.shared(np.asarray(gaussian_filter(self.kernel_size), dtype=theano.config.floatX),
+                                    borrow=True, broadcastable=(True, True, False, False))
+
+    def setup_input(self, input_shape):
+        self.shape = input_shape
+        return self.shape
+
+    def forward(self, X, train=False):
+        batch_size = X.shape[0]
+        X = T.reshape(X, (batch_size*self.shape[0], 1, self.shape[1], self.shape[2]))
+        convout = conv2d(X, filters=self.filter, filter_shape=self.filter_shape, border_mode='full')
+        mid = int(np.floor(self.kernel_size/2.))
+        new_X = X - convout[:, :, mid:-mid, mid:-mid]
+
+        if self.use_divisor:
+            # Scale down norm of kernel_sizexkernel_size patch
+            sum_sqr_XX = conv2d(T.sqr(T.abs_(X)), filters=self.filter,
+                                filter_shape=self.filter_shape, border_mode='full')
+
+            denom = T.sqrt(sum_sqr_XX[:, :, mid:-mid, mid:-mid])
+            per_img_mean = denom.mean(axis=[2, 3])
+            divisor = T.largest(per_img_mean.dimshuffle(0, 1, 'x', 'x'), denom)
+            divisor = T.maximum(divisor, self.threshold)
+
+            new_X /= divisor
+
+        return T.reshape(new_X, ((batch_size,) + self.shape))
 
 
 class BatchNormalization(ForwardPropogator):
@@ -525,7 +585,7 @@ class Maxout(ForwardPropogator):
 ####################################
 
 
-class MLP(ForwardPropogator):
+class MLP(ForwardPropogator, LayerContainer):
     def __init__(self, layers, input_shape=None, logger=sys.stdout):
         self.layers = layers
         self.logger = logger
@@ -561,15 +621,15 @@ class MLP(ForwardPropogator):
                 updates[p] = p - learning_rate*grad
             elif method == 'adagrad':
                 grad_acc = theano.shared(np.zeros(p.get_value().shape, dtype=theano.config.floatX),
-                                         broadcastable=p.broadcastable)
+                                         broadcastable=p.broadcastable, borrow=True)
                 updates[grad_acc] = grad_acc + grad**2
                 lr_p = T.clip(learning_rate/T.sqrt(updates[grad_acc] + 1e-7), 1e-6, 50)
                 updates[p] = p - lr_p*grad
             elif method == 'adadelta':
                 grad_acc = theano.shared(np.zeros(p.get_value().shape, dtype=theano.config.floatX),
-                                         broadcastable=p.broadcastable)
+                                         broadcastable=p.broadcastable, borrow=True)
                 weight_acc = theano.shared(np.zeros(p.get_value().shape, dtype=theano.config.floatX),
-                                           broadcastable=p.broadcastable)
+                                           broadcastable=p.broadcastable, borrow=True)
                 updates[grad_acc] = 0.9*grad_acc + 0.1*(grad**2)
                 lr_p = learning_rate*T.sqrt(weight_acc + 1e-7)/T.sqrt(updates[grad_acc] + 1e-7)
                 delta_p = -lr_p*grad
@@ -577,9 +637,9 @@ class MLP(ForwardPropogator):
                 updates[weight_acc] = 0.9*weight_acc + 0.1*delta_p**2
             elif method == 'adadelta+nesterov':
                 grad_acc = theano.shared(np.zeros(p.get_value().shape, dtype=theano.config.floatX),
-                                         broadcastable=p.broadcastable)
+                                         broadcastable=p.broadcastable, borrow=True)
                 weight_acc = theano.shared(np.zeros(p.get_value().shape, dtype=theano.config.floatX),
-                                           broadcastable=p.broadcastable)
+                                           broadcastable=p.broadcastable, borrow=True)
                 vel = theano.shared(p.get_value()*0., broadcastable=p.broadcastable)
                 updates[grad_acc] = 0.9*grad_acc + 0.1*(grad**2)
                 lr_p = learning_rate*T.sqrt(weight_acc + 1e-7)/T.sqrt(updates[grad_acc] + 1e-7)
@@ -589,7 +649,7 @@ class MLP(ForwardPropogator):
                 updates[weight_acc] = 0.9*weight_acc + 0.1*updates[vel]**2
             elif method == 'rmsprop':
                 mean_square = theano.shared(np.zeros(p.get_value().shape, dtype=theano.config.floatX),
-                                            broadcastable=p.broadcastable)
+                                            broadcastable=p.broadcastable, borrow=True)
                 updates[mean_square] = 0.9*mean_square + 0.1*(grad**2)
                 lr_p = T.clip(learning_rate/T.sqrt(updates[mean_square] + 1e-7), 1e-6, 50)
                 updates[p] = p - lr_p*grad
@@ -604,7 +664,7 @@ class MLP(ForwardPropogator):
             #     updates[p] = p - learning_rate*grad/(T.sqrt(D/updates[i]) + 1e-2)
 
             elif method in ('momentum', 'nesterov'):
-                vel = theano.shared(p.get_value()*0., broadcastable=p.broadcastable)
+                vel = theano.shared(p.get_value()*0., broadcastable=p.broadcastable, borrow=True)
                 updates[vel] = momentum*vel - learning_rate*grad
                 if method == 'nesterov':
                     updates[vel] = momentum*updates[vel] - learning_rate*grad
@@ -731,7 +791,7 @@ def Trainer(model, batch_size, learning_rate, train_X, train_y, valid_X=None, va
                 epoch_time = time.time() - epoch_start_time
 
                 layer_info = OrderedDict()
-                for L_id, L in enumerate(model.layers):
+                for L_id, L in enumerate(model.get_layers()):
                     l_name = '%d%s' % (L_id, L.__class__.__name__)
                     if isinstance(L, DenseLayer) or isinstance(L, ConvolutionalLayer):
                         layer_info[l_name + '_max_norm'] = np.max(calc_norm_numpy(L.W.get_value()))
@@ -751,7 +811,7 @@ def Trainer(model, batch_size, learning_rate, train_X, train_y, valid_X=None, va
                 r_train_x = train_future.result()
             if save_freq is not None and save_freq > 0 and i % save_freq == 0:
                 if save_in_different_files:
-                    cPickle.dump(model, open('%i_%s' % (i, model_file_name), 'wb'), protocol=cPickle.HIGHEST_PROTOCOL)
+                    cPickle.dump(model, open('junk/%i_%s' % (i, model_file_name), 'wb'), protocol=cPickle.HIGHEST_PROTOCOL)
                 else:
                     cPickle.dump(model, open(model_file_name, 'wb'), protocol=cPickle.HIGHEST_PROTOCOL)
 
