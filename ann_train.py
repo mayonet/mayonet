@@ -53,12 +53,12 @@ window = (img_size-2*max_offset, img_size-2*max_offset)
 train_x, train_y, _ = load_npys(which_set='train', image_size=img_size)
 valid_x, valid_y, _ = load_npys(which_set='valid', image_size=img_size)
 
-# train_y = train_y[:, siphonophore_columns]
-# train_x = train_x[np.max(train_y, axis=1) == 1, :]
-# train_y = train_y[np.max(train_y, axis=1) == 1, :]
-# valid_y = valid_y[:, siphonophore_columns]
-# valid_x = valid_x[np.max(valid_y, axis=1) == 1, :]
-# valid_y = valid_y[np.max(valid_y, axis=1) == 1, :]
+train_y = train_y[:, siphonophore_columns]
+train_x = train_x[np.max(train_y, axis=1) == 1, :]
+train_y = train_y[np.max(train_y, axis=1) == 1, :]
+valid_y = valid_y[:, siphonophore_columns]
+valid_x = valid_x[np.max(valid_y, axis=1) == 1, :]
+valid_y = valid_y[np.max(valid_y, axis=1) == 1, :]
 
 train_x = train_x.reshape((train_x.shape[0], 1, np.sqrt(train_x.shape[1]), np.sqrt(train_x.shape[1])))
 valid_x = valid_x.reshape((valid_x.shape[0], 1, np.sqrt(valid_x.shape[1]), np.sqrt(valid_x.shape[1])))
@@ -75,69 +75,42 @@ if os.path.isfile(model_fn) and False:
 else:
     prelu_alpha = 0.25
     mlp = MLP([
+        # LCNNormalization(7),
+
         GaussianDropout(0.03),
-        ConvolutionalLayer((4, 4), 32, train_bias=True, pad=0, leaky_relu_alpha=1, max_kernel_norm=0.9),
-        BatchNormalization(),
+        ConvolutionalLayer((3, 3), 16, leaky_relu_alpha=1),
+        PReLU(prelu_alpha),
+        # LCNNormalization(7),
         MaxPool((2, 2)),
-        # NonLinearity(),
-        PReLU(prelu_alpha),
 
         GaussianDropout(0.03),
-        ConvolutionalLayer((3, 3), 64, train_bias=True, pad=0, leaky_relu_alpha=prelu_alpha, max_kernel_norm=1.24),
-        BatchNormalization(),
-        # NonLinearity(),
-        PReLU(prelu_alpha),
-
-        GaussianDropout(0.03),
-        ConvolutionalLayer((3, 3), 64, train_bias=True, pad=1, leaky_relu_alpha=prelu_alpha, max_kernel_norm=1.24),
-        BatchNormalization(),
+        ConvolutionalLayer((3, 3), 32, leaky_relu_alpha=prelu_alpha),
+        NonLinearity(),
+        # LCNNormalization(7),
         MaxPool((2, 2)),
-        # NonLinearity(),
-        PReLU(prelu_alpha),
 
         GaussianDropout(0.03),
-        ConvolutionalLayer((3, 3), 128, train_bias=True, pad=0, leaky_relu_alpha=prelu_alpha, max_kernel_norm=1.24),
-        BatchNormalization(),
-        # NonLinearity(),
-        PReLU(prelu_alpha),
-
-        GaussianDropout(0.03),
-        ConvolutionalLayer((3, 3), 128, train_bias=True, pad=0, leaky_relu_alpha=prelu_alpha),
-        BatchNormalization(),
-        # NonLinearity(),
-        PReLU(prelu_alpha),
-
-        GaussianDropout(0.03),
-        ConvolutionalLayer((3, 3), 128, train_bias=True, pad=0, leaky_relu_alpha=prelu_alpha),
-        BatchNormalization(),
-        # NonLinearity(),
-        PReLU(prelu_alpha),
-
-        GaussianDropout(0.03),
-        ConvolutionalLayer((3, 3), 256, train_bias=True, pad=0, leaky_relu_alpha=prelu_alpha),
-        BatchNormalization(),
-        # NonLinearity(),
-        PReLU(prelu_alpha),
+        ConvolutionalLayer((3, 3), 64),
+        MaxPool((2, 2)),
+        NonLinearity(),
+        # LCNNormalization(7),
 
         Flatten(),
 
         GaussianDropout(1),
-        DenseLayer(2048, leaky_relu_alpha=prelu_alpha),
-        BatchNormalization(),
-        # NonLinearity(),
-        PReLU(prelu_alpha),
+        DenseLayer(1000),
+        NonLinearity(),
+        # PReLU(prelu_alpha),
         # Maxout(pieces=4),
 
         GaussianDropout(1),
-        DenseLayer(2048, leaky_relu_alpha=prelu_alpha),
-        BatchNormalization(),
-        # NonLinearity(),
-        PReLU(prelu_alpha),
+        DenseLayer(1000),
+        NonLinearity(),
+        # PReLU(prelu_alpha),
         # Maxout(pieces=4),
 
         # GaussianDropout(1),
-        DenseLayer(len_out, max_col_norm=3.82, leaky_relu_alpha=prelu_alpha),
-        BatchNormalization(),
+        DenseLayer(len_out),
         NonLinearity(activation=T.nnet.softmax)
     ], (1,) + window, logger)
 
@@ -145,7 +118,7 @@ else:
 
 ## TODO move to mlp.get_updates
 l2 = 0.0001  # 1e-5
-learning_rate = 1e-2  # np.exp(-2)
+learning_rate = 1e-3  # np.exp(-2)
 momentum = 0.95
 epoch_count = 1000
 batch_size = 64
@@ -156,7 +129,7 @@ lr_min = 1e-15
 mm_min = 0.5
 valid_rnd_count = 1
 
-method = 'nesterov'
+method = 'adadelta'
 
 logger.write('batch=%d, l2=%f, method=%s\nlr=%f, lr_decay=%f,\nmomentum=%f, momentum_decay=%f' %
              (batch_size, l2, method, learning_rate, learning_decay, momentum, momentum_decay))
@@ -177,11 +150,11 @@ print(randomization_params, file=logger)
 
 
 def randomize(dataset):
-    return randomize_dataset_bc01(dataset, **randomization_params)
+    return map(lambda ds: randomize_dataset_bc01(ds, **randomization_params) if ds.ndim == 4 else ds, dataset)
 
 tr = Trainer(mlp, batch_size, learning_rate, train_x, train_y, valid_X=valid_x, valid_y=valid_y, method=method,
              momentum=momentum, lr_decay=learning_decay, lr_min=lr_min, l2=l2, mm_decay=momentum_decay, mm_min=mm_min,
-             # train_augmentation=randomize, valid_augmentation=randomize, valid_aug_count=valid_rnd_count,
+             train_augmentation=randomize, valid_augmentation=randomize, valid_aug_count=valid_rnd_count,
              model_file_name=model_fn, save_freq=1, save_in_different_files=True, epoch_count=epoch_count)
 with open('monitors_%s.csv' % model_fn, 'w', 0) as monitor_csv:
     logger.write('#\tt_nll\tv_nll\ttime\trclass\tlearning rate\tmomentum\tl2_error')  # header
