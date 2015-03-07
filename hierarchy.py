@@ -1,8 +1,13 @@
+from __future__ import division
 from itertools import takewhile
+from operator import itemgetter
+import numpy as np
+from dataset import read_labels
 
 
-parent_to_child_mult=0.6
-child_to_parent_mult=0.6
+parent_to_child_mult = 0.4
+child_to_parent_mult = 0.4
+heat = 100
 
 hierarchy = """ARTIFACTS
     artifacts_edge
@@ -143,6 +148,7 @@ PLANKTON
                 echinoderm_larva_pluteus_early
                 echinoderm_larva_pluteus_typeC
                 echinoderm_larva_pluteus_urchin
+                echinopluteus
     APPENDICULARIAN
         appendicularian_fritillaridae
         appendicularian_s_shape
@@ -208,7 +214,7 @@ GELATINOUS ZOOPLANKTON
             siphonophore_calycophoran_sphaeronectes
                 siphonophore_calycophoran_sphaeronectes_young
                 siphonophore_calycophoran_sphaeronectes_stem
-            siphonophore_calycophoran_rocketship
+            SIPHONOPHORE_CALYCOPHORAN_ROCKETSHIP
                 siphonophore_calycophoran_rocketship_young
                 siphonophore_calycophoran_rocketship_adult
         ctenophore_cydippid_no_tentacles
@@ -311,6 +317,7 @@ ECHINODERM
     echinoderm_larva_pluteus_early
     echinoderm_larva_pluteus_typeC
     echinoderm_larva_pluteus_urchin
+    echinopluteus
 APPENDICULARIAN
     appendicularian_fritillaridae
     appendicularian_s_shape
@@ -357,19 +364,34 @@ class Node:
     def is_root(self):
         return self.name == 'ROOT'
 
+    def is_abstract(self):
+        return self.name.upper() == self.name
 
-root = Node('ROOT', None)
-last_nodes = {-1: root}
-for ln, cnt in rows:
-    parent = last_nodes[cnt - 1]
-    new_node = Node(ln, parent)
-    parent.children.append(new_node)
-    last_nodes[cnt] = new_node
-    # if (cnt == last_node_cnt + 1) or (cnt == last_node_cnt):
-    # print('delete', range(cnt+1, max(last_nodes.keys())))
-    for i in range(cnt+1, max(last_nodes.keys())):
-        if i in last_nodes:
-            del last_nodes[i]
+    def map(self, f):
+        f(self)
+        for c in self.children:
+            c.map(f)
+
+    def reset_probs(self):
+        self.prob = None
+        for c in self.children:
+            c.reset_probs()
+
+
+def read_tree():
+    root = Node('ROOT', None)
+    last_nodes = {-1: root}
+    for ln, cnt in rows:
+        parent = last_nodes[cnt - 1]
+        new_node = Node(ln, parent)
+        parent.children.append(new_node)
+        last_nodes[cnt] = new_node
+        # if (cnt == last_node_cnt + 1) or (cnt == last_node_cnt):
+        # print('delete', range(cnt+1, max(last_nodes.keys())))
+        for i in range(cnt+1, max(last_nodes.keys())):
+            if i in last_nodes:
+                del last_nodes[i]
+    return root
 
 
 def find_node(name, root_of_tree):
@@ -395,5 +417,45 @@ def assign_probs(node, prob, override=True):
     assign_probs(node.parent, prob * child_to_parent_mult, False)
 
 # print(root)
-assign_probs(find_node('siphonophore_partial', root), 1.0)
-print(root)
+# assign_probs(find_node('siphonophore_partial', root), 1.0)
+# print(root)
+
+def heated_targetings(label_to_int, train_y, valid_y=None):
+    marginal_probs = train_y.sum(axis=0) / train_y.shape[0]
+    tree = read_tree()
+    probs_given_classes = []
+    for lbl, yid in sorted(label_to_int.items(), key=itemgetter(1)):
+        tree.reset_probs()
+        assign_probs(find_node(lbl, tree), heat)
+        def assign_prior(node):
+            if node.is_abstract():
+                return
+            marg_prob = marginal_probs[label_to_int[node.name]]
+            if node.prob is None:
+                node.prob = marg_prob
+            else:
+                node.prob = np.max(node.prob * marg_prob, marg_prob)
+        tree.map(assign_prior)
+        probs_given_class = []
+        for lbl2, yid2 in sorted(label_to_int.items(), key=itemgetter(1)):
+            node2 = find_node(lbl2, tree)
+            if node2 is None:
+                print('Not found %s!' % lbl2)
+            probs_given_class.append(node2.prob)
+        probs_given_classes.append(np.array(probs_given_class))
+    probs_given_classes = np.vstack(probs_given_classes)
+    probs_given_classes = probs_given_classes / probs_given_classes.sum(axis=1, keepdims=True)
+    if valid_y is None:
+        return probs_given_classes[train_y.argmax(axis=1)]
+    else:
+        return probs_given_classes[train_y.argmax(axis=1)], probs_given_classes[valid_y.argmax(axis=1)]
+
+# train_y = np.load('/media/marat/MySSD/plankton/train_bluntresize64_y.npy')
+#
+# unique_labels = read_labels()
+# n_classes = len(unique_labels)
+# label_to_int = {unique_labels[i]: i for i in range(n_classes)}
+#
+#
+# soft_train_y = heated_targetings(label_to_int, train_y)
+# print(-np.sum(train_y*np.log(soft_train_y), axis=1).mean())
