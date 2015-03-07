@@ -692,6 +692,12 @@ def neg_log_likelihood(mlp, X, Y, train=False):
     return -T.sum(T.log(Y1) * Y) / Y.shape[0]
 
 
+def soft_log_likelihood(mlp, X, Y, train=False):
+    Y1 = mlp.forward(X, train)
+    Y1 = T.maximum(Y1, 1e-15)
+    return T.sum(T.log(Y/Y1) * Y) / Y.shape[0]
+
+
 def models_l2_error(mlp):
     L = None
     for p, l2scale in mlp.get_params():
@@ -705,7 +711,8 @@ def models_l2_error(mlp):
 def Trainer(model, batch_size, learning_rate, train_X, train_y, valid_X=None, valid_y=None, method='sgd',
             momentum=0, lr_decay=1, lr_min=1e-9, l2=0, mm_decay=1, mm_min=1e-9,
             train_augmentation=identity, valid_augmentation=identity, valid_aug_count=1,
-            model_file_name=None, save_freq=None, save_in_different_files=False, epoch_count=None):
+            model_file_name=None, save_freq=None, save_in_different_files=False, epoch_count=None,
+            cost_f=neg_log_likelihood):
 
     floatX = theano.config.floatX
     minibatch_count = train_y.shape[0] // batch_size
@@ -723,7 +730,7 @@ def Trainer(model, batch_size, learning_rate, train_X, train_y, valid_X=None, va
             raise RuntimeError('Only input with ndim in (2,4) is allowed')
     Y = T.matrix('Y', dtype=train_y.dtype)
     prob = model.forward(X)
-    cost = neg_log_likelihood(model, X, Y, train=True)
+    cost = cost_f(model, X, Y, train=True)
     l2_error = models_l2_error(model)
 
     if valid_X is None:
@@ -732,7 +739,7 @@ def Trainer(model, batch_size, learning_rate, train_X, train_y, valid_X=None, va
         valid_y = train_y
 
     misclass = theano.function(X + [Y], T.eq(T.argmax(prob, axis=1), T.argmax(Y, axis=1)))
-    nll = theano.function(X + [Y], neg_log_likelihood(model, X, Y, train=False))
+    nll = theano.function(X + [Y], cost_f(model, X, Y, train=False))
     calc_l2_error = theano.function([], l2_error)
 
     lr = theano.shared(np.array(learning_rate, dtype=floatX))
