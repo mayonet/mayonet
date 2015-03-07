@@ -386,8 +386,6 @@ def read_tree():
         new_node = Node(ln, parent)
         parent.children.append(new_node)
         last_nodes[cnt] = new_node
-        # if (cnt == last_node_cnt + 1) or (cnt == last_node_cnt):
-        # print('delete', range(cnt+1, max(last_nodes.keys())))
         for i in range(cnt+1, max(last_nodes.keys())):
             if i in last_nodes:
                 del last_nodes[i]
@@ -420,6 +418,7 @@ def assign_probs(node, prob, parent_to_child_mult, child_to_parent_mult, overrid
 # assign_probs(find_node('siphonophore_partial', root), 1.0)
 # print(root)
 
+
 def heated_targetings(label_to_int, train_y, valid_y=None,
                       parent_to_child_mult=0.4, child_to_parent_mult=0.4, coldness=100):
     marginal_probs = train_y.sum(axis=0) / train_y.shape[0]
@@ -429,7 +428,7 @@ def heated_targetings(label_to_int, train_y, valid_y=None,
         tree.reset_probs()
         assign_probs(find_node(lbl, tree), coldness, parent_to_child_mult, child_to_parent_mult)
         def assign_prior(node):
-            if node.is_abstract():
+            if node.name not in label_to_int.keys():
                 return
             marg_prob = marginal_probs[label_to_int[node.name]]
             if node.prob is None:

@@ -1,8 +1,10 @@
 #!/usr/bin/env python2
 from __future__ import division, print_function
+from operator import itemgetter
 import os
 from pprint import pprint
 from dataset import read_labels
+from hierarchy import heated_targetings
 from np_dataset import load_npys
 import theano
 # theano.config.compute_test_value = 'warn'
@@ -35,19 +37,25 @@ logger = Logger(logger_name)
 np.random.seed(1100)
 
 dtype_y = 'uint8'
-model_fn = 'last_model_50_full.pkl'
+model_fn = 'last_model_80_partial.pkl'
 
 unique_labels = read_labels()
 n_classes = len(unique_labels)
 label_to_int = {unique_labels[i]: i for i in range(n_classes)}
+new_label_to_int = {}
 siphonophore_columns = []
-for lbl, idx in label_to_int.items():
-    if lbl.startswith('siphonophore') or lbl.startswith('acantharia'):
+i = 0
+for lbl, idx in sorted(label_to_int.items(), key=itemgetter(1)):
+    if lbl.startswith('siphonophore') or lbl.startswith('acantharia') or lbl.startswith('unknown'):
         siphonophore_columns.append(idx)
+        new_label_to_int[lbl] = i
+        print(lbl)
+        i += 1
 siphonophore_columns = np.array(siphonophore_columns)
+label_to_int = new_label_to_int
 
-img_size = 50
-max_offset = 0
+img_size = 80
+max_offset = 1
 window = (img_size-2*max_offset, img_size-2*max_offset)
 
 train_x, train_y, _ = load_npys(which_set='train', image_size=img_size)
@@ -65,6 +73,7 @@ valid_x = valid_x.reshape((valid_x.shape[0], 1, np.sqrt(valid_x.shape[1]), np.sq
 train_x = np.cast[floatX](1 - train_x/255.)
 valid_x = np.cast[floatX](1 - valid_x/255.)
 
+train_y, valid_y = heated_targetings(label_to_int, train_y, valid_y)
 
 len_in = train_x.shape[1]
 len_out = train_y.shape[1]
@@ -155,7 +164,8 @@ def randomize(dataset):
 tr = Trainer(mlp, batch_size, learning_rate, train_x, train_y, valid_X=valid_x, valid_y=valid_y, method=method,
              momentum=momentum, lr_decay=learning_decay, lr_min=lr_min, l2=l2, mm_decay=momentum_decay, mm_min=mm_min,
              train_augmentation=randomize, valid_augmentation=randomize, valid_aug_count=valid_rnd_count,
-             model_file_name=model_fn, save_freq=1, save_in_different_files=True, epoch_count=epoch_count)
+             model_file_name=model_fn, save_freq=1, save_in_different_files=True, epoch_count=epoch_count,
+             cost_f=soft_log_likelihood)
 with open('monitors_%s.csv' % model_fn, 'w', 0) as monitor_csv:
     logger.write('#\tt_nll\tv_nll\ttime\trclass\tlearning rate\tmomentum\tl2_error')  # header
     for res in tr():
