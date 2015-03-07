@@ -27,6 +27,12 @@ def get_test_data_paths():
     return sorted(os.listdir(TEST_DATA_DIR))
 
 
+def iterate_train_data_names():
+    for label in read_labels():
+        for pict in os.listdir(os.path.join(TRAIN_DATA_DIR, label)):
+            yield pict
+
+
 def iterate_train_data_paths():
     for label in read_labels():
         for pict in os.listdir(os.path.join(TRAIN_DATA_DIR, label)):

@@ -26,6 +26,7 @@ def read_data(which_set='train', image_size=CROP_SIZE, resizing_method='bluntres
         for i, pic in enumerate(test_fns):
             x[i] = read_image(os.path.join(TEST_DATA_DIR, pic), image_size, resizing_method)
         y = None
+        names = test_fns
     else:
         d = list(iterate_train_data_paths())
         random.seed(11)
@@ -35,10 +36,12 @@ def read_data(which_set='train', image_size=CROP_SIZE, resizing_method='bluntres
         n = len(fns)
         x = np.zeros((n, image_size*image_size), dtype='float32')
         y = np.zeros(n, dtype='uint8')
+        names = np.zeros(n, dtype='O')
 
         for i in range(n):
             x[i] = read_image(fns[i], image_size, resizing_method)
             y[i] = label_to_int[labels[i]]
+            names[i] = os.path.basename(fns[i])
 
         for train_i, valid_i in StratifiedKFold(labels, 6):
 
@@ -49,11 +52,16 @@ def read_data(which_set='train', image_size=CROP_SIZE, resizing_method='bluntres
             Ys = {'train': y[train_i],
                   'valid': y[valid_i],
                   'all': y}
+
+            Names = {'train': names[train_i],
+                     'valid': names[valid_i],
+                     'all': names}
             x = Xs[which_set]
             y = one_hot(Ys[which_set])
+            names = Names[which_set]
             break
 
-    return x, y
+    return x, y, names
 
 
 def np_fn(data_dir, which_set, image_size, resizing_method, postfix='x'):
@@ -61,8 +69,9 @@ def np_fn(data_dir, which_set, image_size, resizing_method, postfix='x'):
 
 
 def create_npys(which_set='train', image_size=CROP_SIZE, resizing_method='bluntresize'):
-    x, y = read_data(which_set, image_size, resizing_method)
+    x, y, names = read_data(which_set, image_size, resizing_method)
     np.save(np_fn(DATA_DIR, which_set, image_size, resizing_method, 'x'), x)
+    np.save(np_fn(DATA_DIR, which_set, image_size, resizing_method, 'names'), names)
     if y is not None:
         np.save(np_fn(DATA_DIR, which_set, image_size, resizing_method, 'y'), y)
 
@@ -75,11 +84,12 @@ def load_npys(which_set='train', image_size=CROP_SIZE, resizing_method='bluntres
         print("File %s not found. Creating new..." % x_fn)
         create_npys(which_set, image_size, resizing_method)
     x = np.load(x_fn)
+    names = np.load(np_fn(DATA_DIR, which_set, image_size, resizing_method, 'names'))
     if which_set == 'test':
         y = None
     else:
         y = np.load(np_fn(DATA_DIR, which_set, image_size, resizing_method, 'y'))
-    return x, y
+    return x, y, names
 
 
 if __name__ == '__main__':
