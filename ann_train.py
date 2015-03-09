@@ -73,7 +73,23 @@ valid_x = valid_x.reshape((valid_x.shape[0], 1, np.sqrt(valid_x.shape[1]), np.sq
 train_x = np.cast[floatX](1 - train_x/255.)
 valid_x = np.cast[floatX](1 - valid_x/255.)
 
-train_y, valid_y = heated_targetings(label_to_int, train_y, valid_y)
+cost = neg_log_likelihood
+valid_cost = cost
+
+# cost = soft_log_likelihood
+
+
+def heat_ys(y):
+    cl = zip(0.7**np.arange(1, 10), np.exp(np.arange(2, 11)))
+    heat_ys.iter = min(heat_ys.iter, len(cl)-1)
+    res = heated_targetings(label_to_int, y,
+                            cl[heat_ys.iter][0], cl[heat_ys.iter][0], cl[heat_ys.iter][1])
+    heat_ys.counter += 1
+    if heat_ys.counter % 3 == 0:
+        heat_ys.iter += 1
+    return res
+heat_ys.counter = 0
+heat_ys.iter = 0
 
 len_in = train_x.shape[1]
 len_out = train_y.shape[1]
@@ -84,36 +100,66 @@ if os.path.isfile(model_fn) and False:
 else:
     prelu_alpha = 0.25
     mlp = MLP([
-        # LCNNormalization(7),
-
         GaussianDropout(0.03),
-        ConvolutionalLayer((3, 3), 16, leaky_relu_alpha=1),
+        ConvolutionalLayer((3, 3), 64, leaky_relu_alpha=1),
+        MaxPool((2, 2)),
         PReLU(prelu_alpha),
-        # LCNNormalization(7),
-        MaxPool((2, 2)),
 
         GaussianDropout(0.03),
-        ConvolutionalLayer((3, 3), 32, leaky_relu_alpha=prelu_alpha),
-        NonLinearity(),
-        # LCNNormalization(7),
-        MaxPool((2, 2)),
+        ConvolutionalLayer((3, 3), 128, pad=1, leaky_relu_alpha=prelu_alpha),
+        # MaxPool((2, 2)),
+        PReLU(prelu_alpha),
 
         GaussianDropout(0.03),
-        ConvolutionalLayer((3, 3), 64),
+        ConvolutionalLayer((3, 3), 128, leaky_relu_alpha=prelu_alpha),
         MaxPool((2, 2)),
         NonLinearity(),
-        # LCNNormalization(7),
+
+        GaussianDropout(0.03),
+        ConvolutionalLayer((3, 3), 256, pad=1),
+        # MaxPool((2, 2)),
+        NonLinearity(),
+
+        GaussianDropout(0.03),
+        ConvolutionalLayer((3, 3), 256, pad=1),
+        # MaxPool((2, 2)),
+        NonLinearity(),
+
+        GaussianDropout(0.03),
+        ConvolutionalLayer((3, 3), 256),
+        MaxPool((2, 2)),
+        NonLinearity(),
+
+        GaussianDropout(0.03),
+        ConvolutionalLayer((3, 3), 256, pad=1),
+        # MaxPool((2, 2)),
+        NonLinearity(),
+
+        GaussianDropout(0.03),
+        ConvolutionalLayer((3, 3), 256, pad=1),
+        # MaxPool((2, 2)),
+        NonLinearity(),
+
+        GaussianDropout(0.03),
+        ConvolutionalLayer((3, 3), 256, pad=1),
+        # MaxPool((2, 2)),
+        NonLinearity(),
+
+        GaussianDropout(0.03),
+        ConvolutionalLayer((3, 3), 256),
+        MaxPool((2, 2)),
+        NonLinearity(),
 
         Flatten(),
 
-        GaussianDropout(1),
-        DenseLayer(1000),
+        # GaussianDropout(1),
+        DenseLayer(2000),
         NonLinearity(),
         # PReLU(prelu_alpha),
         # Maxout(pieces=4),
 
-        GaussianDropout(1),
-        DenseLayer(1000),
+        # GaussianDropout(1),
+        DenseLayer(2000),
         NonLinearity(),
         # PReLU(prelu_alpha),
         # Maxout(pieces=4),
@@ -126,8 +172,8 @@ else:
 
 
 ## TODO move to mlp.get_updates
-l2 = 0.0001  # 1e-5
-learning_rate = 1e-3  # np.exp(-2)
+l2 = 0  # 1e-5
+learning_rate = 1  # np.exp(-2)
 momentum = 0.95
 epoch_count = 1000
 batch_size = 64
@@ -136,7 +182,7 @@ learning_decay = 1  # 0.5 ** (1./(250 * minibatch_count))
 momentum_decay = 1  # 0.5 ** (1./(1000 * minibatch_count))
 lr_min = 1e-15
 mm_min = 0.5
-valid_rnd_count = 1
+valid_rnd_count = 10
 
 method = 'adadelta'
 
@@ -164,8 +210,9 @@ def randomize(dataset):
 tr = Trainer(mlp, batch_size, learning_rate, train_x, train_y, valid_X=valid_x, valid_y=valid_y, method=method,
              momentum=momentum, lr_decay=learning_decay, lr_min=lr_min, l2=l2, mm_decay=momentum_decay, mm_min=mm_min,
              train_augmentation=randomize, valid_augmentation=randomize, valid_aug_count=valid_rnd_count,
+             # train_y_augmentation=heat_ys,
              model_file_name=model_fn, save_freq=1, save_in_different_files=True, epoch_count=epoch_count,
-             cost_f=soft_log_likelihood)
+             cost_f=cost, valid_cost_f=valid_cost)
 with open('monitors_%s.csv' % model_fn, 'w', 0) as monitor_csv:
     logger.write('#\tt_nll\tv_nll\ttime\trclass\tlearning rate\tmomentum\tl2_error')  # header
     for res in tr():

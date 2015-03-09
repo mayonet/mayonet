@@ -4,6 +4,7 @@ import pandas as pd
 import os
 from pprint import pprint
 from dataset import read_labels, iterate_train_data_names
+from hierarchy import heated_targetings
 from np_dataset import load_npys
 import theano
 # theano.config.compute_test_value = 'warn'
@@ -36,7 +37,7 @@ logger = Logger(logger_name)
 np.random.seed(1100)
 
 dtype_y = 'uint8'
-model_fn = 'last_model_50_full.pkl'
+model_fn = 'last_model_80_full.pkl'
 
 img_size = 80
 max_offset = 1
@@ -96,7 +97,32 @@ len_out = train_y.shape[1]
 train_x = train_x  # cropped_train_x)  # , train_props)
 valid_x = valid_x  # cropped_valid_x)  # , valid_props)
 
-if os.path.isfile(model_fn) and False:
+
+unique_labels = read_labels()
+n_classes = len(unique_labels)
+label_to_int = {unique_labels[i]: i for i in range(n_classes)}
+
+
+def heat_ys(y):
+    cl = zip(0.7**np.arange(1, 10), np.exp(np.arange(2, 11)))
+    heat_ys.iter = min(heat_ys.iter, len(cl)-1)
+    res = heated_targetings(label_to_int, y,
+                            cl[heat_ys.iter][0], cl[heat_ys.iter][0], cl[heat_ys.iter][1])
+    heat_ys.counter += 1
+    if heat_ys.counter % 3 == 0:
+        heat_ys.iter += 1
+    return res
+heat_ys.counter = 0
+heat_ys.iter = 0
+
+cost = neg_log_likelihood
+valid_cost = cost
+train_y_modifier = identity
+
+# cost = soft_log_likelihood
+# train_y_modifier = heat_ys
+
+if os.path.isfile(model_fn) and True:
     logger.write('Loading model from %s...' % model_fn)
     mlp = cPickle.load(open(model_fn, 'rb'))
 else:
@@ -105,42 +131,61 @@ else:
         # Parallel([
             MLP([
                 GaussianDropout(0.03),
-                ConvolutionalLayer((3, 3), 32, leaky_relu_alpha=1),
+                ConvolutionalLayer((3, 3), 64, leaky_relu_alpha=1),
                 MaxPool((2, 2)),
                 PReLU(prelu_alpha),
 
                 GaussianDropout(0.03),
-                ConvolutionalLayer((3, 3), 64, leaky_relu_alpha=prelu_alpha),
-                NonLinearity(),
+                ConvolutionalLayer((3, 3), 128, pad=1, leaky_relu_alpha=prelu_alpha),
+                # MaxPool((2, 2)),
+                PReLU(prelu_alpha),
 
                 GaussianDropout(0.03),
-                ConvolutionalLayer((3, 3), 64, leaky_relu_alpha=prelu_alpha),
-                NonLinearity(),
-
-                GaussianDropout(0.03),
-                ConvolutionalLayer((3, 3), 64),
+                ConvolutionalLayer((3, 3), 128, leaky_relu_alpha=prelu_alpha),
                 MaxPool((2, 2)),
                 NonLinearity(),
 
                 GaussianDropout(0.03),
-                ConvolutionalLayer((3, 3), 128),
+                ConvolutionalLayer((3, 3), 256, pad=1),
+                # MaxPool((2, 2)),
                 NonLinearity(),
 
                 GaussianDropout(0.03),
-                ConvolutionalLayer((3, 3), 128),
+                ConvolutionalLayer((3, 3), 256, pad=1),
+                # MaxPool((2, 2)),
                 NonLinearity(),
 
                 GaussianDropout(0.03),
-                ConvolutionalLayer((3, 3), 128),
+                ConvolutionalLayer((3, 3), 256),
+                MaxPool((2, 2)),
+                NonLinearity(),
+
+                GaussianDropout(0.03),
+                ConvolutionalLayer((3, 3), 256, pad=1),
+                # MaxPool((2, 2)),
+                NonLinearity(),
+
+                GaussianDropout(0.03),
+                ConvolutionalLayer((3, 3), 256, pad=1),
+                # MaxPool((2, 2)),
+                NonLinearity(),
+
+                GaussianDropout(0.03),
+                ConvolutionalLayer((3, 3), 256, pad=1),
+                # MaxPool((2, 2)),
+                NonLinearity(),
+
+                GaussianDropout(0.03),
+                ConvolutionalLayer((3, 3), 256),
                 MaxPool((2, 2)),
                 NonLinearity(),
 
                 Flatten(),
 
                 Dropout(0.5),
-                DenseLayer(1500),
+                DenseLayer(2000),
                 NonLinearity()
-            ]),
+            ], logger=logger),
             # MLP([
             #     GaussianDropout(0.03),
             #     ConvolutionalLayer((3, 3), 16, leaky_relu_alpha=prelu_alpha),
@@ -174,7 +219,7 @@ else:
         # ]),
 
         Dropout(0.5),
-        DenseLayer(1500),
+        DenseLayer(2000),
         NonLinearity(),
 
         Dropout(0.5),
@@ -186,11 +231,11 @@ else:
 
 
 ## TODO move to mlp.get_updates
-l2 = 0.00001  # 1e-5
-learning_rate = 1e-1  # np.exp(-2)
+l2 = 0.000001  # 1e-5
+learning_rate = 2e-2  # np.exp(-2)
 momentum = 0.97
 epoch_count = 1000
-batch_size = 100
+batch_size = 64
 minibatch_count = train_y.shape[0] // batch_size
 learning_decay = 1  # 0.5 ** (1./(300 * minibatch_count))
 momentum_decay = 1  # 0.5 ** (1./(1000 * minibatch_count))
@@ -233,7 +278,9 @@ def randomize(dataset):
 tr = Trainer(mlp, batch_size, learning_rate, train_x, train_y, valid_X=valid_x, valid_y=valid_y, method=method,
              momentum=momentum, lr_decay=learning_decay, lr_min=lr_min, l2=l2, mm_decay=momentum_decay, mm_min=mm_min,
              train_augmentation=randomize, valid_augmentation=randomize, valid_aug_count=valid_rnd_count,
-             model_file_name=model_fn, save_freq=1, save_in_different_files=True, epoch_count=epoch_count)
+             train_y_augmentation=train_y_modifier,
+             model_file_name=model_fn, save_freq=1, save_in_different_files=True, epoch_count=epoch_count,
+             cost_f=cost, valid_cost_f=valid_cost)
 with open('monitors_%s.csv' % model_fn, 'w', 0) as monitor_csv:
     logger.write('#\tt_nll\tv_nll\ttime\trclass\tlearning rate\tmomentum\tl2_error')  # header
     for res in tr():

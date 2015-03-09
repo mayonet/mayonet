@@ -419,7 +419,7 @@ def assign_probs(node, prob, parent_to_child_mult, child_to_parent_mult, overrid
 # print(root)
 
 
-def heated_targetings(label_to_int, train_y, valid_y=None,
+def heated_targetings(label_to_int, train_y,
                       parent_to_child_mult=0.4, child_to_parent_mult=0.4, coldness=100):
     marginal_probs = train_y.sum(axis=0) / train_y.shape[0]
     tree = read_tree()
@@ -445,10 +445,7 @@ def heated_targetings(label_to_int, train_y, valid_y=None,
         probs_given_classes.append(np.array(probs_given_class))
     probs_given_classes = np.vstack(probs_given_classes)
     probs_given_classes = probs_given_classes / probs_given_classes.sum(axis=1, keepdims=True)
-    if valid_y is None:
-        return probs_given_classes[train_y.argmax(axis=1)]
-    else:
-        return probs_given_classes[train_y.argmax(axis=1)], probs_given_classes[valid_y.argmax(axis=1)]
+    return np.cast['float32'](probs_given_classes[train_y.argmax(axis=1)])
 
 # train_y = np.load('/media/marat/MySSD/plankton/train_bluntresize64_y.npy')
 #

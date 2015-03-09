@@ -711,8 +711,9 @@ def models_l2_error(mlp):
 def Trainer(model, batch_size, learning_rate, train_X, train_y, valid_X=None, valid_y=None, method='sgd',
             momentum=0, lr_decay=1, lr_min=1e-9, l2=0, mm_decay=1, mm_min=1e-9,
             train_augmentation=identity, valid_augmentation=identity, valid_aug_count=1,
+            train_y_augmentation=identity, valid_y_augmentation=identity,
             model_file_name=None, save_freq=None, save_in_different_files=False, epoch_count=None,
-            cost_f=neg_log_likelihood):
+            cost_f=neg_log_likelihood, valid_cost_f=None):
 
     floatX = theano.config.floatX
     minibatch_count = train_y.shape[0] // batch_size
@@ -728,7 +729,7 @@ def Trainer(model, batch_size, learning_rate, train_X, train_y, valid_X=None, va
             X.append(T.tensor4('X', dtype=floatX))
         else:
             raise RuntimeError('Only input with ndim in (2,4) is allowed')
-    Y = T.matrix('Y', dtype=train_y.dtype)
+    Y = T.matrix('Y', dtype=floatX)
     prob = model.forward(X)
     cost = cost_f(model, X, Y, train=True)
     l2_error = models_l2_error(model)
@@ -739,7 +740,9 @@ def Trainer(model, batch_size, learning_rate, train_X, train_y, valid_X=None, va
         valid_y = train_y
 
     misclass = theano.function(X + [Y], T.eq(T.argmax(prob, axis=1), T.argmax(Y, axis=1)))
-    nll = theano.function(X + [Y], cost_f(model, X, Y, train=False))
+    if valid_cost_f is None:
+        valid_cost_f = cost_f
+    nll = theano.function(X + [Y], valid_cost_f(model, X, Y, train=False))
     calc_l2_error = theano.function([], l2_error)
 
     lr = theano.shared(np.array(learning_rate, dtype=floatX))
@@ -766,6 +769,9 @@ def Trainer(model, batch_size, learning_rate, train_X, train_y, valid_X=None, va
             epoch_start_time = time.time()
             np.random.shuffle(indexes)
 
+            epoch_train_y = train_y_augmentation(train_y)
+            epoch_valid_y = valid_y_augmentation(valid_y)
+
             with ProcessPoolExecutor(max_workers=2)as ex:
                 valid_futures = ex.map(valid_augmentation, itertools.repeat(valid_X, valid_aug_count))
                 train_future = ex.submit(train_augmentation, train_X)
@@ -773,7 +779,7 @@ def Trainer(model, batch_size, learning_rate, train_X, train_y, valid_X=None, va
                 for b in range(minibatch_count):
                     k = indexes[b * batch_size:(b + 1) * batch_size]
                     batch_x = [d[k] for d in r_train_x]
-                    batch_y = train_y[k]
+                    batch_y = epoch_train_y[k]
                     batch_nll = float(train_model(*batch_x + [batch_y]))
                     batch_nlls.append(batch_nll)
                 train_nll = np.mean(batch_nlls)
@@ -782,10 +788,10 @@ def Trainer(model, batch_size, learning_rate, train_X, train_y, valid_X=None, va
                 test_nlls = []
                 valid_misclasses = []
                 for r_valid_x in valid_futures:
-                    for vb in range(valid_y.shape[0] // batch_size):
+                    for vb in range(epoch_valid_y.shape[0] // batch_size):
                         k = range(vb * batch_size, (vb + 1) * batch_size)
                         batch_x = [d[k] for d in r_valid_x]
-                        batch_y = valid_y[k]
+                        batch_y = epoch_valid_y[k]
                         batch_nll = float(nll(*batch_x + [batch_y]))
                         test_nlls.append(batch_nll)
                         batch_misclass = misclass(*batch_x + [batch_y]) * 100
