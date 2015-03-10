@@ -7,7 +7,7 @@ from skimage.transform import resize
 from time import time
 import numpy as np
 import sys
-from wand.image import Image
+# from wand.image import Image
 
 CROP_SIZE = 80
 
@@ -94,29 +94,29 @@ def resize_image(img, size=CROP_SIZE, method='crop'):
 
 
 def read_image(fn, size, method):
-    if method == 'liquid':
-        new_img = np.zeros((size, size))
-        with Image(filename=fn) as img:
-            img.liquid_rescale(size, size)
-            for y, row in enumerate(img):
-                for x, elem in enumerate(row):
-                    new_img[y, x] = elem.red_int8
+    # if method == 'liquid':
+    #     new_img = np.zeros((size, size))
+    #     with Image(filename=fn) as img:
+    #         img.liquid_rescale(size, size)
+    #         for y, row in enumerate(img):
+    #             for x, elem in enumerate(row):
+    #                 new_img[y, x] = elem.red_int8
+    #
+    # else:
+    img = imread(fn, as_grey=True)
 
+    if method == 'crop':
+        new_img = crop(img, (size, size))
+    elif method == 'bluntresize':
+        new_img = blunt_resize(img, size)
+    elif method == 'shrink':
+        new_img = shrink(img, size)
+    elif method == 'rationalresize':
+        new_img = rational_resize(img, size)
+    elif method == 'bluntaftercrop':
+        new_img = blunt_after_crop(img, size)
     else:
-        img = imread(fn, as_grey=True)
-
-        if method == 'crop':
-            new_img = crop(img, (size, size))
-        elif method == 'bluntresize':
-            new_img = blunt_resize(img, size)
-        elif method == 'shrink':
-            new_img = shrink(img, size)
-        elif method == 'rationalresize':
-            new_img = rational_resize(img, size)
-        elif method == 'bluntaftercrop':
-            new_img = blunt_after_crop(img, size)
-        else:
-            raise Exception('Illegal method "%s"' % method)
+        raise Exception('Illegal method "%s"' % method)
 
     return new_img.reshape((size * size,))
 
