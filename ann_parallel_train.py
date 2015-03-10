@@ -37,7 +37,7 @@ logger = Logger(logger_name)
 np.random.seed(1100)
 
 dtype_y = 'uint8'
-model_fn = 'last_model_80_full.pkl'
+model_fn = 'last_model_50_full.pkl'
 
 img_size = 78
 max_offset = 0
@@ -118,6 +118,9 @@ label_to_int = {unique_labels[i]: i for i in range(n_classes)}
 cost = neg_log_likelihood
 valid_cost = cost
 train_y_modifier = identity
+
+train_x = np.vstack((train_x, valid_x))
+train_y = np.vstack((train_y, valid_y))
 
 # cost = soft_log_likelihood
 # train_y_modifier = heat_ys
@@ -221,7 +224,7 @@ learning_rate = 3e-5  # np.exp(-2)
 momentum = 0.97
 epoch_count = 1000
 batch_size = 100
-minibatch_count = train_y.shape[0] // batch_size
+minibatch_count = (train_y.shape[0]-1) // batch_size + 1
 learning_decay = 1  # 0.5 ** (1./(10 * minibatch_count))
 momentum_decay = 1  # 0.5 ** (1./(1000 * minibatch_count))
 lr_min = 1e-15
