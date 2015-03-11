@@ -37,10 +37,10 @@ logger = Logger(logger_name)
 np.random.seed(1100)
 
 dtype_y = 'uint8'
-model_fn = 'last_model_50_full.pkl'
+model_fn = 'last_model_80_full.pkl'
 
-img_size = 78
-max_offset = 0
+img_size = 82
+max_offset = 1
 window = (img_size-2*max_offset, img_size-2*max_offset)
 
 train_x, train_y, train_names = load_npys(which_set='train', image_size=img_size)
@@ -119,8 +119,9 @@ cost = neg_log_likelihood
 valid_cost = cost
 train_y_modifier = identity
 
-train_x = np.vstack((train_x, valid_x))
-train_y = np.vstack((train_y, valid_y))
+# print('merging train and valid')
+# train_x = np.vstack((train_x, valid_x))
+# train_y = np.vstack((train_y, valid_y))
 
 # cost = soft_log_likelihood
 # train_y_modifier = heat_ys
@@ -134,23 +135,23 @@ else:
         # Parallel([
             MLP([
                 GaussianDropout(0.003),
-                ConvolutionalLayer((5, 5), 128, pad=1, leaky_relu_alpha=1),
+                ConvolutionalLayer((5, 5), 128, leaky_relu_alpha=1),
                 MaxPool((2, 2)),
                 PReLU(prelu_alpha),
 
                 # GaussianDropout(0.03),
                 ConvolutionalLayer((3, 3), 196, leaky_relu_alpha=prelu_alpha),
-                # MaxPool((2, 2)),
-                NonLinearity(),
-
-                # GaussianDropout(0.03),
-                ConvolutionalLayer((3, 3), 196, pad=1),
                 MaxPool((2, 2)),
                 NonLinearity(),
 
                 # GaussianDropout(0.03),
                 ConvolutionalLayer((3, 3), 256),
-                MaxPool((2, 2)),
+                # MaxPool((2, 2)),
+                NonLinearity(),
+
+                # GaussianDropout(0.03),
+                ConvolutionalLayer((3, 3), 256),
+                # MaxPool((2, 2)),
                 NonLinearity()
             ], logger=logger),
             # MLP([
@@ -186,30 +187,34 @@ else:
         # ]),
 
         MLP([
+            # GaussianDropout(0.03),
+            ConvolutionalLayer((3, 3), 256),
+            # MaxPool((2, 2)),
+            NonLinearity(),
+
+            GaussianDropout(0.003),
+            ConvolutionalLayer((3, 3), 256),
             MaxPool((2, 2)),
-            # # GaussianDropout(0.03),
-            # ConvolutionalLayer((3, 3), 256, pad=1),
+            NonLinearity(),
+
+            # GaussianDropout(0.03),
+            ConvolutionalLayer((3, 3), 256),
             # MaxPool((2, 2)),
-            # NonLinearity(),
-            #
-            # # GaussianDropout(0.03),
-            # ConvolutionalLayer((3, 3), 256),
-            # MaxPool((2, 2)),
-            # NonLinearity(),
+            NonLinearity(),
 
             Flatten(),
 
-            # Dropout(0.5),
+            Dropout(0.5),
             DenseLayer(2000),
             NonLinearity()
         ], logger=logger),
 
         MLP([
-            Dropout(0.5),
+            Dropout(0.8),
             DenseLayer(2000),
             NonLinearity(),
 
-            Dropout(0.5),
+            Dropout(0.8),
             DenseLayer(len_out),
             NonLinearity(activation=T.nnet.softmax)
         ], logger=logger),
@@ -217,13 +222,12 @@ else:
         logger=logger)
 
 
-
 ## TODO move to mlp.get_updates
-l2 = 0  # .000001  # 1e-5
-learning_rate = 3e-5  # np.exp(-2)
-momentum = 0.97
+l2 = 1e-5
+learning_rate = 5e-4  # np.exp(-2)
+momentum = 0.99
 epoch_count = 1000
-batch_size = 100
+batch_size = 64
 minibatch_count = (train_y.shape[0]-1) // batch_size + 1
 learning_decay = 1  # 0.5 ** (1./(10 * minibatch_count))
 momentum_decay = 1  # 0.5 ** (1./(1000 * minibatch_count))
@@ -265,7 +269,7 @@ def randomize(dataset):
 
 tr = Trainer(mlp, batch_size, learning_rate, train_x, train_y, valid_X=valid_x, valid_y=valid_y, method=method,
              momentum=momentum, lr_decay=learning_decay, lr_min=lr_min, l2=l2, mm_decay=momentum_decay, mm_min=mm_min,
-             # train_augmentation=randomize, valid_augmentation=randomize, valid_aug_count=valid_rnd_count,
+             train_augmentation=randomize, valid_augmentation=randomize, valid_aug_count=valid_rnd_count,
              train_y_augmentation=train_y_modifier,
              model_file_name=model_fn, save_freq=1, save_in_different_files=True, epoch_count=epoch_count,
              cost_f=cost, valid_cost_f=valid_cost)
