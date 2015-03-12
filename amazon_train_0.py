@@ -39,7 +39,7 @@ np.random.seed(1100)
 dtype_y = 'uint8'
 model_fn = 'amazon_train_0.pkl'
 
-img_size = 120
+img_size = 100
 max_offset = 1
 window = (img_size-2*max_offset, img_size-2*max_offset)
 
@@ -139,7 +139,7 @@ else:
             PReLU(prelu_alpha),
 
             GaussianDropout(0.03),
-            ConvolutionalLayer((3, 3), 32, leaky_relu_alpha=prelu_alpha),
+            ConvolutionalLayer((3, 3), 32, pad=1, leaky_relu_alpha=prelu_alpha),
             MaxPool((2, 2)),
             PReLU(prelu_alpha),
 
@@ -156,7 +156,7 @@ else:
 
         MLP([
             GaussianDropout(0.03),
-            ConvolutionalLayer((3, 3), 128),
+            ConvolutionalLayer((3, 3), 128, pad=1),
             # MaxPool((2, 2)),
             NonLinearity(),
 
