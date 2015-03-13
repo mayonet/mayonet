@@ -109,8 +109,8 @@ def basic_crop(img, new_sizes):
     return cropped
 
 
-def randomize_image_c01(img, window, angles=range(360), x_offsets=(0, 1), y_offsets=(0, 1),
-                        median_radii=(0,), mean_radii=(0,), flip=True, scales=(1,)):
+def randomize_image_c01(img, window, angles=(0,), x_offsets=(0,), y_offsets=(0,),
+                        median_radii=(0,), mean_radii=(0,), flip=False, scales=(1,)):
     offsets = list(product(y_offsets, x_offsets))
     img = img[0]
     h, w = img.shape
