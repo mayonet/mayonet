@@ -39,7 +39,7 @@ np.random.seed(1101)
 dtype_y = 'uint8'
 model_fn = 'last_model_80_full.pkl'
 
-img_size = 102
+img_size = 94
 max_offset = 1
 window = (img_size-2*max_offset, img_size-2*max_offset)
 
@@ -136,12 +136,8 @@ else:
                 BatchNormalization(),
                 PReLU(prelu_alpha),
 
-                ConvolutionalLayer((3, 3), 48, leaky_relu_alpha=0.1),
-                MaxPool((3, 2)),
-                BatchNormalization(),
-                PReLU(prelu_alpha),
-
-                ConvolutionalLayer((3, 3), 72, leaky_relu_alpha=0.1),
+                ConvolutionalLayer((3, 3), 64, leaky_relu_alpha=0.1),
+                MaxPool((2, 2)),
                 BatchNormalization(),
                 PReLU(prelu_alpha),
 
@@ -149,28 +145,20 @@ else:
                 BatchNormalization(),
                 PReLU(prelu_alpha),
 
-                ConvolutionalLayer((3, 3), 88, leaky_relu_alpha=0.1),
+                ConvolutionalLayer((3, 3), 96, leaky_relu_alpha=0.1),
                 BatchNormalization(),
                 PReLU(prelu_alpha),
 
-                ConvolutionalLayer((3, 3), 96, leaky_relu_alpha=0.1),
+                ConvolutionalLayer((3, 3), 112, leaky_relu_alpha=0.1),
+                BatchNormalization(),
+                PReLU(prelu_alpha),
+
+                ConvolutionalLayer((3, 3), 128, leaky_relu_alpha=0.1),
                 BatchNormalization(),
                 MaxPool((2, 2)),
                 PReLU(prelu_alpha),
 
-                ConvolutionalLayer((3, 3), 200, leaky_relu_alpha=0.1),
-                BatchNormalization(),
-                NonLinearity(activation=LeakyReLU(0.1)),
-
-                ConvolutionalLayer((3, 3), 220, leaky_relu_alpha=0.1),
-                BatchNormalization(),
-                NonLinearity(activation=LeakyReLU(0.1)),
-
-                ConvolutionalLayer((3, 3), 240, leaky_relu_alpha=0.1),
-                BatchNormalization(),
-                NonLinearity(activation=LeakyReLU(0.1)),
-
-                ConvolutionalLayer((3, 3), 260, leaky_relu_alpha=0.1),
+                ConvolutionalLayer((3, 3), 250, leaky_relu_alpha=0.1),
                 BatchNormalization(),
                 NonLinearity(activation=LeakyReLU(0.1)),
 
@@ -178,13 +166,22 @@ else:
                 BatchNormalization(),
                 NonLinearity(activation=LeakyReLU(0.1)),
 
-                ConvolutionalLayer((3, 3), 300, leaky_relu_alpha=0.1),
+                ConvolutionalLayer((3, 3), 310, leaky_relu_alpha=0.1),
                 BatchNormalization(),
                 NonLinearity(activation=LeakyReLU(0.1)),
 
-                ConvolutionalLayer((3, 3), 320, leaky_relu_alpha=0.1),
+                ConvolutionalLayer((3, 3), 340, leaky_relu_alpha=0.1),
                 BatchNormalization(),
                 NonLinearity(activation=LeakyReLU(0.1)),
+
+                ConvolutionalLayer((3, 3), 370, leaky_relu_alpha=0.1),
+                BatchNormalization(),
+                NonLinearity(activation=LeakyReLU(0.1)),
+
+                ConvolutionalLayer((3, 3), 400, leaky_relu_alpha=0.1),
+                BatchNormalization(),
+                NonLinearity(activation=LeakyReLU(0.1)),
+
                 MaxPool((2, 2)),
 
                 Flatten(),
