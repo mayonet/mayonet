@@ -29,7 +29,7 @@ def read_data(which_set='train', image_size=CROP_SIZE, resizing_method='bluntres
         names = test_fns
     else:
         d = list(iterate_train_data_paths())
-        random.seed(11)
+        random.seed(112)
         random.shuffle(d)
         fns, labels = zip(*d)
 
