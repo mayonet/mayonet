@@ -158,7 +158,19 @@ else:
                 MaxPool((2, 2)),
                 PReLU(prelu_alpha),
 
-                ConvolutionalLayer((3, 3), 250, leaky_relu_alpha=0.1),
+                ConvolutionalLayer((3, 3), 200, leaky_relu_alpha=0.1),
+                BatchNormalization(),
+                NonLinearity(activation=LeakyReLU(0.1)),
+
+                ConvolutionalLayer((3, 3), 220, leaky_relu_alpha=0.1),
+                BatchNormalization(),
+                NonLinearity(activation=LeakyReLU(0.1)),
+
+                ConvolutionalLayer((3, 3), 240, leaky_relu_alpha=0.1),
+                BatchNormalization(),
+                NonLinearity(activation=LeakyReLU(0.1)),
+
+                ConvolutionalLayer((3, 3), 260, leaky_relu_alpha=0.1),
                 BatchNormalization(),
                 NonLinearity(activation=LeakyReLU(0.1)),
 
@@ -166,19 +178,7 @@ else:
                 BatchNormalization(),
                 NonLinearity(activation=LeakyReLU(0.1)),
 
-                ConvolutionalLayer((3, 3), 310, leaky_relu_alpha=0.1),
-                BatchNormalization(),
-                NonLinearity(activation=LeakyReLU(0.1)),
-
-                ConvolutionalLayer((3, 3), 340, leaky_relu_alpha=0.1),
-                BatchNormalization(),
-                NonLinearity(activation=LeakyReLU(0.1)),
-
-                ConvolutionalLayer((3, 3), 370, leaky_relu_alpha=0.1),
-                BatchNormalization(),
-                NonLinearity(activation=LeakyReLU(0.1)),
-
-                ConvolutionalLayer((3, 3), 400, leaky_relu_alpha=0.1),
+                ConvolutionalLayer((3, 3), 300, leaky_relu_alpha=0.1),
                 BatchNormalization(),
                 NonLinearity(activation=LeakyReLU(0.1)),
 
@@ -187,7 +187,7 @@ else:
                 Flatten(),
 
                 Dropout(0.5, 1),
-                DenseLayer(2500, leaky_relu_alpha=0.1),
+                DenseLayer(2000, leaky_relu_alpha=0.1),
                 BatchNormalization(),
                 Maxout(5),
 
