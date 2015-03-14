@@ -37,7 +37,7 @@ logger = Logger(logger_name)
 np.random.seed(1101)
 
 dtype_y = 'uint8'
-model_fn = 'last_model_80_full.pkl'
+model_fn = 'lemonhope.pkl'
 
 img_size = 94
 max_offset = 1
