@@ -76,47 +76,52 @@ if os.path.isfile(model_fn) and True:
     mlp = cPickle.load(open(model_fn, 'rb'))
 else:
     mlp = MLP([
-        Dropout(0.8, 1),
+        GaussianDropout(0.03),
         ConvolutionalLayer((3, 3), 16),
         MaxPool((2, 2)),
         Maxout(),
 
+        GaussianDropout(0.03),
         ConvolutionalLayer((3, 3), 32, pad=1),
         MaxPool((2, 2)),
         Maxout(),
 
+        GaussianDropout(0.03),
         ConvolutionalLayer((3, 3), 64),
         # MaxPool((2, 2)),
         Maxout(),
 
+        GaussianDropout(0.03),
         ConvolutionalLayer((3, 3), 96),
         MaxPool((2, 2)),
         Maxout(),
 
-        Dropout(0.8, 1),
-
+        GaussianDropout(0.03),
         ConvolutionalLayer((3, 3), 128, pad=1),
         # MaxPool((2, 2)),
         Maxout(),
 
+        GaussianDropout(0.03),
         ConvolutionalLayer((3, 3), 192),
         # MaxPool((2, 2)),
         Maxout(),
 
+        GaussianDropout(0.03),
         ConvolutionalLayer((3, 3), 256),
         MaxPool((2, 2)),
         Maxout(),
 
         Flatten(),
 
-        Dropout(0.6, 1),
+        GaussianDropout(1),
         DenseLayer(2500, max_col_norm=3.5),
         Maxout(5),
 
-        Dropout(0.6, 1),
+        GaussianDropout(1),
         DenseLayer(2500, max_col_norm=3.5),
         Maxout(5),
 
+        GaussianDropout(1),
         DenseLayer(len_out, max_col_norm=3.5),
         NonLinearity(activation=T.nnet.softmax)
     ], (1,) + window,  # (1,) + cropped_window  # , train_props.shape[1:]
@@ -124,8 +129,8 @@ else:
 
 
 ## TODO move to mlp.get_updates
-l2 = 0  # 1e-4
-learning_rate = 1e-3  # np.exp(-2)
+l2 = 1e-5
+learning_rate = 1e-2  # np.exp(-2)
 momentum = 0.99
 epoch_count = 1000
 batch_size = 64
