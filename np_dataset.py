@@ -15,7 +15,7 @@ def one_hot(y):
     return y0
 
 
-def read_data(which_set='train', image_size=CROP_SIZE, resizing_method='bluntresize', only_labels=None):
+def read_data(which_set='train', image_size=CROP_SIZE, resizing_method='bluntresize', only_labels=None, seed=11):
     unique_labels = read_labels()
     n_classes = len(unique_labels)
     label_to_int = {unique_labels[i]: i for i in range(n_classes)}
@@ -29,7 +29,7 @@ def read_data(which_set='train', image_size=CROP_SIZE, resizing_method='bluntres
         names = test_fns
     else:
         d = list(iterate_train_data_paths())
-        random.seed(112)
+        random.seed(seed)
         random.shuffle(d)
         fns, labels = zip(*d)
 
@@ -64,31 +64,31 @@ def read_data(which_set='train', image_size=CROP_SIZE, resizing_method='bluntres
     return x, y, names
 
 
-def np_fn(data_dir, which_set, image_size, resizing_method, postfix='x'):
-    return '%s/%s_%s%d_%s.npy' % (data_dir, which_set, resizing_method, image_size, postfix)
+def np_fn(data_dir, which_set, image_size, resizing_method, seed, postfix='x'):
+    return '%s/%s_%s%d_%s_seed%d.npy' % (data_dir, which_set, resizing_method, image_size, postfix, seed)
 
 
-def create_npys(which_set='train', image_size=CROP_SIZE, resizing_method='bluntresize'):
-    x, y, names = read_data(which_set, image_size, resizing_method)
-    np.save(np_fn(DATA_DIR, which_set, image_size, resizing_method, 'x'), x)
-    np.save(np_fn(DATA_DIR, which_set, image_size, resizing_method, 'names'), names)
+def create_npys(which_set='train', image_size=CROP_SIZE, resizing_method='bluntresize', seed=11):
+    x, y, names = read_data(which_set, image_size, resizing_method, seed)
+    np.save(np_fn(DATA_DIR, which_set, image_size, resizing_method, seed, 'x'), x)
+    np.save(np_fn(DATA_DIR, which_set, image_size, resizing_method, seed, 'names'), names)
     if y is not None:
-        np.save(np_fn(DATA_DIR, which_set, image_size, resizing_method, 'y'), y)
+        np.save(np_fn(DATA_DIR, which_set, image_size, resizing_method, seed, 'y'), y)
 
 
-def load_npys(which_set='train', image_size=CROP_SIZE, resizing_method='bluntresize'):
+def load_npys(which_set='train', image_size=CROP_SIZE, resizing_method='bluntresize', seed=11):
     assert which_set in ['train', 'test', 'valid']
 
-    x_fn = np_fn(DATA_DIR, which_set, image_size, resizing_method, 'x')
+    x_fn = np_fn(DATA_DIR, which_set, image_size, resizing_method, seed, 'x')
     if not os.path.isfile(x_fn):
         print("File %s not found. Creating new..." % x_fn)
-        create_npys(which_set, image_size, resizing_method)
+        create_npys(which_set, image_size, resizing_method, seed)
     x = np.load(x_fn)
-    names = np.load(np_fn(DATA_DIR, which_set, image_size, resizing_method, 'names'))
+    names = np.load(np_fn(DATA_DIR, which_set, image_size, resizing_method, seed, 'names'))
     if which_set == 'test':
         y = None
     else:
-        y = np.load(np_fn(DATA_DIR, which_set, image_size, resizing_method, 'y'))
+        y = np.load(np_fn(DATA_DIR, which_set, image_size, resizing_method, seed, 'y'))
     return x, y, names
 
 
