@@ -7,7 +7,7 @@ from dataset import read_labels, iterate_train_data_names
 from hierarchy import heated_targetings
 from np_dataset import load_npys
 import theano
-# theano.config.compute_test_value = 'wa    rn'
+# theano.config.compute_test_value = 'warn'
 from rotator import randomize_dataset_bc01
 
 # theano.config.exception_verbosity = 'high'
@@ -34,26 +34,26 @@ logger_name = time.strftime("%Y-%m-%dT%H-%M-%S.log")
 logger = Logger(logger_name)
 
 
-np.random.seed(1100)
+np.random.seed(1101)
 
 dtype_y = 'uint8'
-model_fn = 'igipop.pkl'
+model_fn = 'amazon_train3shrink.pkl'
 
 img_size = 100
 max_offset = 1
 window = (img_size-2*max_offset, img_size-2*max_offset)
 
-train_x, train_y, train_names = load_npys(which_set='train', image_size=img_size, resizing_method='bluntresize')
-valid_x, valid_y, valid_names = load_npys(which_set='valid', image_size=img_size, resizing_method='bluntresize')
+train_x, train_y, train_names = load_npys(which_set='train', image_size=img_size, resizing_method='shrink', seed=1231)
+valid_x, valid_y, valid_names = load_npys(which_set='valid', image_size=img_size, resizing_method='shrink', seed=1231)
 
 train_x = train_x.reshape((train_x.shape[0], 1, np.sqrt(train_x.shape[1]), np.sqrt(train_x.shape[1])))
 valid_x = valid_x.reshape((valid_x.shape[0], 1, np.sqrt(valid_x.shape[1]), np.sqrt(valid_x.shape[1])))
 train_x = np.cast[floatX](1 - train_x/255.)
 valid_x = np.cast[floatX](1 - valid_x/255.)
 
-# cropped_size = 40
-# cropped_offset = 1
-# cropped_window = (cropped_size-2*cropped_offset, cropped_size-2*cropped_offset)
+cropped_size = 40
+cropped_offset = 1
+cropped_window = (cropped_size-2*cropped_offset, cropped_size-2*cropped_offset)
 
 # cropped_train_x, _, _ = load_npys(which_set='train', image_size=cropped_size, resizing_method='crop')
 # cropped_valid_x, _, _ = load_npys(which_set='valid', image_size=cropped_size, resizing_method='crop')
@@ -119,9 +119,9 @@ cost = neg_log_likelihood
 valid_cost = cost
 train_y_modifier = identity
 
-print('merging train and valid')
-train_x = np.vstack((train_x, valid_x))
-train_y = np.vstack((train_y, valid_y))
+# print('merging train and valid')
+# train_x = np.vstack((train_x, valid_x))
+# train_y = np.vstack((train_y, valid_y))
 
 # cost = soft_log_likelihood
 # train_y_modifier = heat_ys
@@ -133,61 +133,56 @@ else:
     prelu_alpha = 0.25
     mlp = MLP([
         MLP([
-            GaussianDropout(0.01),
-            ConvolutionalLayer((3, 3), 16),
+            GaussianDropout(0.005),
+            ConvolutionalLayer((3, 3), 16, max_kernel_norm=3.0),
             MaxPool((2, 2)),
-            PReLU(prelu_alpha),
+            NonLinearity(),
 
-            GaussianDropout(0.01),
-            ConvolutionalLayer((3, 3), 48, pad=1, leaky_relu_alpha=prelu_alpha),
+            GaussianDropout(0.005),
+            ConvolutionalLayer((3, 3), 32, pad=1, max_kernel_norm=3.0),
             MaxPool((2, 2)),
-            PReLU(prelu_alpha),
+            NonLinearity(),
 
-            GaussianDropout(0.01),
-            ConvolutionalLayer((3, 3), 96, leaky_relu_alpha=prelu_alpha),
+            GaussianDropout(0.005),
+            ConvolutionalLayer((3, 3), 64, max_kernel_norm=3.0),
             # MaxPool((2, 2)),
-            PReLU(prelu_alpha),
+            NonLinearity(),
 
-            GaussianDropout(0.01),
-            ConvolutionalLayer((3, 3), 128, leaky_relu_alpha=prelu_alpha),
+            GaussianDropout(0.005),
+            ConvolutionalLayer((3, 3), 96, max_kernel_norm=3.0),
             MaxPool((2, 2)),
-            PReLU(prelu_alpha),
+            NonLinearity()
         ], logger=logger),
 
         MLP([
-            GaussianDropout(0.01),
-            ConvolutionalLayer((3, 3), 192, pad=1, leaky_relu_alpha=prelu_alpha),
+            GaussianDropout(0.005),
+            ConvolutionalLayer((3, 3), 128, pad=1, max_kernel_norm=3.0),
             # MaxPool((2, 2)),
-            PReLU(prelu_alpha),
+            NonLinearity(),
 
-            GaussianDropout(0.01),
-            ConvolutionalLayer((3, 3), 256, leaky_relu_alpha=prelu_alpha),
+            GaussianDropout(0.005),
+            ConvolutionalLayer((3, 3), 192, max_kernel_norm=3.0),
             # MaxPool((2, 2)),
-            PReLU(prelu_alpha),
+            NonLinearity(),
 
-            GaussianDropout(0.01),
-            ConvolutionalLayer((3, 3), 320, leaky_relu_alpha=prelu_alpha),
+            GaussianDropout(0.005),
+            ConvolutionalLayer((3, 3), 256, max_kernel_norm=3.0),
             MaxPool((2, 2)),
-            PReLU(prelu_alpha),
+            NonLinearity(),
 
             Flatten(),
 
-            Dropout(0.5),
-            DenseLayer(2000, leaky_relu_alpha=prelu_alpha),
-            PReLU(prelu_alpha),
+            Dropout(0.8, 1),
+            DenseLayer(2500, max_col_norm=3.5),
+            Maxout()
         ], logger=logger),
 
         MLP([
-            Dropout(0.5),
-            DenseLayer(2000, leaky_relu_alpha=prelu_alpha),
-            PReLU(prelu_alpha),
+            Dropout(0.8, 1),
+            DenseLayer(2500, max_col_norm=3.5),
+            Maxout(5),
 
-            Dropout(0.5),
-            DenseLayer(2000, leaky_relu_alpha=prelu_alpha),
-            PReLU(prelu_alpha),
-
-            Dropout(0.5),
-            DenseLayer(len_out, leaky_relu_alpha=prelu_alpha),
+            DenseLayer(len_out, max_col_norm=3.5),
             NonLinearity(activation=T.nnet.softmax)
         ], logger=logger),
     ], (1,) + window,  # (1,) + cropped_window  # , train_props.shape[1:]
@@ -196,7 +191,7 @@ else:
 
 ## TODO move to mlp.get_updates
 l2 = 0  # 1e-4
-learning_rate = 5e-5  # np.exp(-2)
+learning_rate = 1e-3  # np.exp(-2)
 momentum = 0.99
 epoch_count = 1000
 batch_size = 64
@@ -223,19 +218,15 @@ randomization_params = {
     'flip': True
 }
 
-polish_randomization_params = {
-    'window': window,
+cropped_randomization_params = {
+    'window': cropped_window,
     'scales': (1,),
-    'angles': (0, 90, 180, 270),
-    'x_offsets': range(max_offset+1),
-    'y_offsets': range(max_offset+1),
+    'angles': (0, 90, 180),
+    'x_offsets': range(cropped_offset+1),
+    'y_offsets': range(cropped_offset+1),
     'flip': True
 }
 print(randomization_params, file=logger)
-
-
-def polish_randomize(dataset):
-    return randomize_dataset_bc01(dataset[0], **polish_randomization_params),
 
 
 def randomize(dataset):
@@ -245,7 +236,7 @@ def randomize(dataset):
 
 tr = Trainer(mlp, batch_size, learning_rate, train_x, train_y, valid_X=valid_x, valid_y=valid_y, method=method,
              momentum=momentum, lr_decay=learning_decay, lr_min=lr_min, l2=l2, mm_decay=momentum_decay, mm_min=mm_min,
-             train_augmentation=polish_randomize, valid_augmentation=polish_randomize, valid_aug_count=valid_rnd_count,
+             train_augmentation=randomize, valid_augmentation=randomize, valid_aug_count=valid_rnd_count,
              train_y_augmentation=train_y_modifier,
              model_file_name=model_fn, save_freq=1, save_in_different_files=True, epoch_count=epoch_count,
              cost_f=cost, valid_cost_f=valid_cost)
