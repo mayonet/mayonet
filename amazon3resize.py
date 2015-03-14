@@ -37,14 +37,14 @@ logger = Logger(logger_name)
 np.random.seed(1101)
 
 dtype_y = 'uint8'
-model_fn = 'amazon_train3shrink.pkl'
+model_fn = 'amazon3resize.pkl'
 
 img_size = 100
 max_offset = 1
 window = (img_size-2*max_offset, img_size-2*max_offset)
 
-train_x, train_y, train_names = load_npys(which_set='train', image_size=img_size, resizing_method='shrink', seed=1231)
-valid_x, valid_y, valid_names = load_npys(which_set='valid', image_size=img_size, resizing_method='shrink', seed=1231)
+train_x, train_y, train_names = load_npys(which_set='train', image_size=img_size, resizing_method='bluntresize', seed=1232)
+valid_x, valid_y, valid_names = load_npys(which_set='valid', image_size=img_size, resizing_method='bluntresize', seed=1232)
 
 train_x = train_x.reshape((train_x.shape[0], 1, np.sqrt(train_x.shape[1]), np.sqrt(train_x.shape[1])))
 valid_x = valid_x.reshape((valid_x.shape[0], 1, np.sqrt(valid_x.shape[1]), np.sqrt(valid_x.shape[1])))
