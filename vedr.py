@@ -78,11 +78,58 @@ else:
         PReLU(prelu_alpha),
 
         GaussianDropout(0.01),
-        ConvolutionalLayer((3, 3), 32),
+        ConvolutionalLayer((3, 3), 32, leaky_relu_alpha=prelu_alpha),
         MaxPool((3, 3), (2, 2)),
         PReLU(prelu_alpha),
 
+        GaussianDropout(0.01),
+        ConvolutionalLayer((3, 3), 48, leaky_relu_alpha=prelu_alpha),
+        PReLU(prelu_alpha),
+
+        GaussianDropout(0.01),
+        ConvolutionalLayer((3, 3), 64, leaky_relu_alpha=prelu_alpha),
+        PReLU(prelu_alpha),
+
+        GaussianDropout(0.01),
+        ConvolutionalLayer((3, 3), 80, leaky_relu_alpha=prelu_alpha),
+        MaxPool((2, 2)),
+        PReLU(prelu_alpha),
+
+        GaussianDropout(0.01),
+        ConvolutionalLayer((3, 3), 96, leaky_relu_alpha=prelu_alpha),
+        PReLU(prelu_alpha),
+
+        GaussianDropout(0.01),
+        ConvolutionalLayer((3, 3), 112, leaky_relu_alpha=prelu_alpha),
+        PReLU(prelu_alpha),
+
+        GaussianDropout(0.01),
+        ConvolutionalLayer((3, 3), 128, leaky_relu_alpha=prelu_alpha),
+        PReLU(prelu_alpha),
+
+        GaussianDropout(0.01),
+        ConvolutionalLayer((3, 3), 144, leaky_relu_alpha=prelu_alpha),
+        MaxPool((2, 2)),
+        PReLU(prelu_alpha),
+
+        GaussianDropout(0.01),
+        ConvolutionalLayer((3, 3), 160, leaky_relu_alpha=prelu_alpha),
+        PReLU(prelu_alpha),
+
+        GaussianDropout(0.01),
+        ConvolutionalLayer((3, 3), 176, leaky_relu_alpha=prelu_alpha),
+        PReLU(prelu_alpha),
+
+        GaussianDropout(0.01),
+        ConvolutionalLayer((3, 3), 192, leaky_relu_alpha=prelu_alpha),
+        MaxPool((2, 2)),
+        PReLU(prelu_alpha),
+
         Flatten(),
+
+        Dropout(0.5),
+        DenseLayer(2000, leaky_relu_alpha=prelu_alpha),
+        PReLU(prelu_alpha),
 
         Dropout(0.5),
         DenseLayer(2000, leaky_relu_alpha=prelu_alpha),
@@ -104,7 +151,7 @@ l2 = 0  # 1e-4
 learning_rate = 5e-4  # np.exp(-2)
 momentum = 0.99
 epoch_count = 1000
-batch_size = 64
+batch_size = 32
 minibatch_count = (train_y.shape[0]-1) // batch_size + 1
 learning_decay = 0.5 ** (1./(100 * minibatch_count))
 momentum_decay = 1  # 0.5 ** (1./(1000 * minibatch_count))
