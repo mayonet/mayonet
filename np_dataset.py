@@ -77,7 +77,7 @@ def create_npys(which_set='train', image_size=CROP_SIZE, resizing_method='bluntr
 
 
 def load_npys(which_set='train', image_size=CROP_SIZE, resizing_method='bluntresize', seed=11):
-    assert which_set in ['train', 'test', 'valid']
+    assert which_set in ['train', 'test', 'valid', 'all']
 
     x_fn = np_fn(DATA_DIR, which_set, image_size, resizing_method, seed, 'x')
     if not os.path.isfile(x_fn):

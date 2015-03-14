@@ -778,7 +778,7 @@ def Trainer(model, batch_size, learning_rate, train_X, train_y, valid_X=None, va
                 batch_nlls = []
                 k_next = indexes[:batch_size]
                 batch_future = ex.submit(train_augmentation, [d[k_next] for d in train_X])
-                for b in range(1, minibatch_count):
+                for b in range(1, minibatch_count+1):
                     k = k_next
                     k_next = indexes[b * batch_size:(b + 1) * batch_size]
                     batch_x = batch_future.result()
