@@ -1,16 +1,12 @@
 #!/usr/bin/env python2
 from __future__ import division, print_function
-import pandas as pd
 import os
-from pprint import pprint
 from dataset import read_labels, iterate_train_data_names
 from hierarchy import heated_targetings
 from np_dataset import load_npys
 import theano
-# theano.config.compute_test_value = 'warn'
 from rotator import randomize_dataset_bc01
 
-# theano.config.exception_verbosity = 'high'
 theano.config.floatX = 'float32'
 theano.config.blas.ldflags = '-lblas -lgfortran'
 floatX = theano.config.floatX
@@ -51,69 +47,17 @@ valid_x = valid_x.reshape((valid_x.shape[0], 1, np.sqrt(valid_x.shape[1]), np.sq
 train_x = np.cast[floatX](1 - train_x/255.)
 valid_x = np.cast[floatX](1 - valid_x/255.)
 
-cropped_size = 40
-cropped_offset = 1
-cropped_window = (cropped_size-2*cropped_offset, cropped_size-2*cropped_offset)
-
-# cropped_train_x, _, _ = load_npys(which_set='train', image_size=cropped_size, resizing_method='crop')
-# cropped_valid_x, _, _ = load_npys(which_set='valid', image_size=cropped_size, resizing_method='crop')
-#
-# cropped_train_x = cropped_train_x.reshape((cropped_train_x.shape[0], 1, np.sqrt(cropped_train_x.shape[1]), np.sqrt(cropped_train_x.shape[1])))
-# cropped_valid_x = cropped_valid_x.reshape((cropped_valid_x.shape[0], 1, np.sqrt(cropped_valid_x.shape[1]), np.sqrt(cropped_valid_x.shape[1])))
-# cropped_train_x = np.cast[floatX](1 - cropped_train_x/255.)
-# cropped_valid_x = np.cast[floatX](1 - cropped_valid_x/255.)
-
-# csv_location = '/home/yoptar/git/subway-plankton/train_img_props.csv'
-# pan_props = pd.read_csv(csv_location, sep='\t')
-
-# # train_props = None
-# # for name in train_names:
-# #     prop = np.cast[floatX](pan_props[pan_props['file_name'] == name].drop(['class', 'file_name'], axis=1).values)
-# #     if train_props is None:
-# #         train_props = prop
-# #     else:
-# #         train_props = np.vstack((train_props, prop))
-# # print('prepared train_props')
-# train_props = np.load('/plankton/train_props.npy')
-#
-# # valid_props = None
-# # for name in valid_names:
-# #     prop = np.cast[floatX](pan_props[pan_props['file_name'] == name].drop(['class', 'file_name'], axis=1).values)
-# #     if valid_props is None:
-# #         valid_props = prop
-# #     else:
-# #         valid_props = np.vstack((valid_props, prop))
-# # print('prepared valid_props')
-# valid_props = np.load('/plankton/valid_props.npy')
-
-# means = train_props.mean(axis=0)
-# stds = np.std(train_props, axis=0)
-# train_props = (train_props - means) / stds
-# valid_props = (valid_props - means) / stds
-
 len_in = train_x.shape[1]
 len_out = train_y.shape[1]
 
-train_x = train_x  # cropped_train_x)  # , train_props)
-valid_x = valid_x  # cropped_valid_x)  # , valid_props)
+train_x = train_x
+valid_x = valid_x
 
 
 unique_labels = read_labels()
 n_classes = len(unique_labels)
 label_to_int = {unique_labels[i]: i for i in range(n_classes)}
 
-
-# def heat_ys(y):
-#     cl = zip(0.7**np.arange(1, 10), np.exp(np.arange(2, 11)))
-#     heat_ys.iter = min(heat_ys.iter, len(cl)-1)
-#     res = heated_targetings(label_to_int, y,
-#                             cl[heat_ys.iter][0], cl[heat_ys.iter][0], cl[heat_ys.iter][1])
-#     heat_ys.counter += 1
-#     if heat_ys.counter % 3 == 0:
-#         heat_ys.iter += 1
-#     return res
-# heat_ys.counter = 0
-# heat_ys.iter = 0
 
 cost = neg_log_likelihood
 valid_cost = cost
@@ -123,68 +67,61 @@ train_y_modifier = identity
 # train_x = np.vstack((train_x, valid_x))
 # train_y = np.vstack((train_y, valid_y))
 
-# cost = soft_log_likelihood
-# train_y_modifier = heat_ys
-
 if os.path.isfile(model_fn) and True:
     logger.write('Loading model from %s...' % model_fn)
     mlp = cPickle.load(open(model_fn, 'rb'))
 else:
     prelu_alpha = 0.25
     mlp = MLP([
-        MLP([
-            GaussianDropout(0.005),
-            ConvolutionalLayer((3, 3), 16, max_kernel_norm=3.0),
-            MaxPool((2, 2)),
-            NonLinearity(),
+        GaussianDropout(0.005),
+        ConvolutionalLayer((3, 3), 16, max_kernel_norm=3.0),
+        MaxPool((2, 2)),
+        NonLinearity(),
 
-            GaussianDropout(0.005),
-            ConvolutionalLayer((3, 3), 32, pad=1, max_kernel_norm=3.0),
-            MaxPool((2, 2)),
-            NonLinearity(),
+        GaussianDropout(0.005),
+        ConvolutionalLayer((3, 3), 32, pad=1, max_kernel_norm=3.0),
+        MaxPool((2, 2)),
+        NonLinearity(),
 
-            GaussianDropout(0.005),
-            ConvolutionalLayer((3, 3), 64, max_kernel_norm=3.0),
-            # MaxPool((2, 2)),
-            NonLinearity(),
+        GaussianDropout(0.005),
+        ConvolutionalLayer((3, 3), 64, max_kernel_norm=3.0),
+        # MaxPool((2, 2)),
+        NonLinearity(),
 
-            GaussianDropout(0.005),
-            ConvolutionalLayer((3, 3), 96, max_kernel_norm=3.0),
-            MaxPool((2, 2)),
-            NonLinearity()
-        ], logger=logger),
+        GaussianDropout(0.005),
+        ConvolutionalLayer((3, 3), 96, max_kernel_norm=3.0),
+        MaxPool((2, 2)),
+        NonLinearity(),
 
-        MLP([
-            GaussianDropout(0.005),
-            ConvolutionalLayer((3, 3), 128, pad=1, max_kernel_norm=3.0),
-            # MaxPool((2, 2)),
-            NonLinearity(),
+        Dropout(0.9),
+        ConvolutionalLayer((3, 3), 128, pad=1, max_kernel_norm=3.0),
+        # MaxPool((2, 2)),
+        NonLinearity(),
 
-            GaussianDropout(0.005),
-            ConvolutionalLayer((3, 3), 192, max_kernel_norm=3.0),
-            # MaxPool((2, 2)),
-            NonLinearity(),
+        Dropout(0.8),
+        GaussianDropout(0.01),
+        ConvolutionalLayer((3, 3), 192, max_kernel_norm=3.0),
+        # MaxPool((2, 2)),
+        NonLinearity(),
 
-            GaussianDropout(0.005),
-            ConvolutionalLayer((3, 3), 256, max_kernel_norm=3.0),
-            MaxPool((2, 2)),
-            NonLinearity(),
+        Dropout(0.7),
+        GaussianDropout(0.005),
+        ConvolutionalLayer((3, 3), 256, max_kernel_norm=3.0),
+        MaxPool((2, 2)),
+        NonLinearity(),
 
-            Flatten(),
+        Flatten(),
 
-            Dropout(0.8, 1),
-            DenseLayer(2500, max_col_norm=3.5),
-            Maxout()
-        ], logger=logger),
+        Dropout(0.6, 1),
+        DenseLayer(2500, max_col_norm=3.5),
+        Maxout(),
 
-        MLP([
-            Dropout(0.8, 1),
-            DenseLayer(2500, max_col_norm=3.5),
-            Maxout(5),
+        Dropout(0.5, 1),
+        DenseLayer(2500, max_col_norm=3.5),
+        Maxout(5),
 
-            DenseLayer(len_out, max_col_norm=3.5),
-            NonLinearity(activation=T.nnet.softmax)
-        ], logger=logger),
+        DenseLayer(len_out, max_col_norm=3.5),
+        NonLinearity(activation=T.nnet.softmax)
     ], (1,) + window,  # (1,) + cropped_window  # , train_props.shape[1:]
         logger=logger)
 
@@ -222,8 +159,8 @@ cropped_randomization_params = {
     'window': window,
     'scales': (1,),
     'angles': (0, 90, 180, 270),
-    'x_offsets': range(cropped_offset+1),
-    'y_offsets': range(cropped_offset+1),
+    'x_offsets': range(max_offset+1),
+    'y_offsets': range(max_offset+1),
     'flip': True
 }
 print(randomization_params, file=logger)
