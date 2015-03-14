@@ -130,7 +130,7 @@ else:
 
 ## TODO move to mlp.get_updates
 l2 = 1e-5
-learning_rate = 1e-2  # np.exp(-2)
+learning_rate = 1e-3  # np.exp(-2)
 momentum = 0.99
 epoch_count = 1000
 batch_size = 64

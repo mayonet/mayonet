@@ -126,7 +126,7 @@ else:
 
 ## TODO move to mlp.get_updates
 l2 = 1e-5
-learning_rate = 1e-2  # np.exp(-2)
+learning_rate = 1e-3  # np.exp(-2)
 momentum = 0.99
 epoch_count = 1000
 batch_size = 64
@@ -135,7 +135,7 @@ learning_decay = 0.5 ** (1./(100 * minibatch_count))
 momentum_decay = 1  # 0.5 ** (1./(1000 * minibatch_count))
 lr_min = 1e-15
 mm_min = 0.5
-valid_rnd_count = 1
+valid_rnd_count = 10
 
 method = 'nesterov'
 
