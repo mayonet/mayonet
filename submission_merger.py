@@ -3,11 +3,11 @@ import gzip
 import pandas as pd
 import sys
 
-csvs = {'/media/marat/MySSD/plankton/submissions/2015.02.04.1/2015.02.04.1.csv.gz': 1.0,
-        '/media/marat/MySSD/plankton/submissions/2015.02.05.1/results.csv.gz': 2.0,
-        '/media/marat/MySSD/plankton/submissions/2015.02.07.1/results.csv.gz': 1.0}
+csvs = {'/home/yoptar/git/subway-plankton/submissions/amazon_train_2.polished/results.csv.gz': 1.0,
+        '/home/yoptar/git/subway-plankton/submissions/amazon_train0/results.csv.gz': 1.0,
+        '/home/yoptar/git/subway-plankton/submissions/amazon_train1/results.csv.gz': 1.0}
 
-out_file_name = 'averaged'
+out_file_name = 'amazon_train_1_2_averaged'
 row_names = None
 new_data = None
 total_w = 0

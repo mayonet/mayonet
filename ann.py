@@ -758,7 +758,7 @@ def Trainer(model, batch_size, learning_rate, train_X, train_y, valid_X=None, va
     )
 
     def trainer_func():
-        r_train_x = train_augmentation(train_X)
+        # r_train_x = train_augmentation(train_X)
         indexes = np.arange(train_y.shape[0])
         best_v_nll = 2.
         if epoch_count is not None:
@@ -774,16 +774,21 @@ def Trainer(model, batch_size, learning_rate, train_X, train_y, valid_X=None, va
 
             with ProcessPoolExecutor(max_workers=2)as ex:
                 valid_futures = ex.map(valid_augmentation, itertools.repeat(valid_X, valid_aug_count))
-                train_future = ex.submit(train_augmentation, train_X)
+                # train_future = ex.submit(train_augmentation, train_X)
                 batch_nlls = []
-                for b in range(minibatch_count):
-                    k = indexes[b * batch_size:(b + 1) * batch_size]
-                    batch_x = [d[k] for d in r_train_x]
+                k_next = indexes[:batch_size]
+                batch_future = ex.submit(train_augmentation, [d[k_next] for d in train_X])
+                for b in range(1, minibatch_count):
+                    k = k_next
+                    k_next = indexes[b * batch_size:(b + 1) * batch_size]
+                    batch_x = batch_future.result()
+                    if len(k_next) > 0:
+                        batch_future = ex.submit(train_augmentation, [d[k_next] for d in train_X])
                     batch_y = epoch_train_y[k]
-                    batch_nll = float(train_model(*batch_x + [batch_y]))
+                    batch_nll = float(train_model(*batch_x + (batch_y,)))
                     batch_nlls.append(batch_nll)
                 train_nll = np.mean(batch_nlls)
-                del r_train_x  # Try to free up some memory
+                # del r_train_x  # Try to free up some memory
 
                 test_nlls = []
                 valid_misclasses = []
@@ -821,7 +826,7 @@ def Trainer(model, batch_size, learning_rate, train_X, train_y, valid_X=None, va
                                    ('l2_error', calc_l2_error()*l2)))
                 res.update(layer_info)
                 yield res
-                r_train_x = train_future.result()
+                # r_train_x = train_future.result()
             if save_freq is not None and save_freq > 0 and i % save_freq == 0:
                 if save_in_different_files:
                     cPickle.dump(model, open('junk/%i_%s' % (i, model_file_name), 'wb'), protocol=cPickle.HIGHEST_PROTOCOL)
