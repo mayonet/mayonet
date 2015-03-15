@@ -3,6 +3,7 @@ from collections import OrderedDict
 from blaze.compute import pandas
 import numpy as np
 import os
+from pandas import read_csv
 from skimage import io, morphology, measure
 
 
@@ -91,49 +92,58 @@ def get_max_area_dict(file_name, folder=None):
 
 
 if __name__ == '__main__':
-    # imagePropertiesList = []
+    imagePropertiesList = []
     BASE_DIR = '/plankton'
     TRAIN_DIR = os.path.join(BASE_DIR, 'train')
     TEST_DIR = os.path.join(BASE_DIR, 'test')
     directory_names = os.listdir(TRAIN_DIR)
 
-    csv_name = 'train_img_props.csv'
-
-    with open(csv_name, 'w') as f:
-        needs_header = True
-        for train_index in range(len(directory_names)):
-            folder = directory_names[train_index]
-            basedir = os.path.join(TRAIN_DIR, folder)
-            filenames = os.listdir(basedir)
-
-            print(train_index, folder, len(filenames))
-            for index in range(len(filenames)):
-                filename = filenames[index]
-                fullname = os.path.join(basedir, filename)
-
-                image_property_dict = get_max_area_dict(fullname, folder)
-
-                if needs_header:
-                    needs_header = False
-                    print('\t'.join(image_property_dict.iterkeys()), file=f)
-                print('\t'.join(str(v) for v in image_property_dict.itervalues()), file=f)
+    # csv_name = 'train_img_props.csv'
+    #
+    # with open(csv_name, 'w') as f:
+    #     needs_header = True
+    #     for train_index in range(len(directory_names)):
+    #         folder = directory_names[train_index]
+    #         basedir = os.path.join(TRAIN_DIR, folder)
+    #         filenames = os.listdir(basedir)
+    #
+    #         print(train_index, folder, len(filenames))
+    #         for index in range(len(filenames)):
+    #             filename = filenames[index]
+    #             fullname = os.path.join(basedir, filename)
+    #
+    #             image_property_dict = get_max_area_dict(fullname, folder)
+    #
+    #             if needs_header:
+    #                 needs_header = False
+    #                 print('\t'.join(image_property_dict.iterkeys()), file=f)
+    #             print('\t'.join(str(v) for v in image_property_dict.itervalues()), file=f)
 
                 # imagePropertiesList.append(image_property_dict)
 
-    # csv_name = 'test_img_props.csv'
-    #
-    # test_file_names = os.listdir(TEST_DIR)
-    #
-    # for test_index in range(len(test_file_names)):
-    #     filename = test_file_names[test_index]
-    #     if test_index % 1000 == 0:
-    #         print(test_index, '/', len(test_file_names))
-    #
-    #     fullname = os.path.join(TEST_DIR, filename)
-    #
-    #     image_property_dict = get_max_area_dict(fullname)
-    #
-    #     imagePropertiesList.append(image_property_dict)
+    csv_name = 'test_img_props.csv'
+    test_file_names = os.listdir(TEST_DIR)
 
-    # df = pandas.DataFrame(imagePropertiesList)
-    # df.to_csv(csv_name, sep='\t', index=False)
+    with open(csv_name, 'w') as f:
+        needs_header = True
+        for test_index in range(len(test_file_names)):
+            # if test_index == 66:
+            #     break
+            if test_index % 1000 == 0:
+                print(test_index, '/', len(test_file_names))
+
+            fullname = os.path.join(TEST_DIR, test_file_names[test_index])
+
+            image_property_dict = get_max_area_dict(fullname, 'TEST_DATA')
+
+            if needs_header:
+                needs_header = False
+                print('\t'.join(image_property_dict.iterkeys()), file=f)
+            print('\t'.join(str(v) for v in image_property_dict.itervalues()), file=f)
+
+
+    # prepare for mjerjer
+    d = read_csv(csv_name, sep='\t')
+    d.drop('class', 1, inplace=True)
+    d.rename(columns={'file_name': 'image'}, inplace=True)
+    d.to_csv(csv_name, sep='\t', index=False)
