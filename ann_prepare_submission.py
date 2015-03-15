@@ -2,6 +2,8 @@ from __future__ import print_function
 
 import cPickle
 import os
+from concurrent.futures import ProcessPoolExecutor
+import itertools
 import theano
 import theano.tensor as T
 import numpy as np
@@ -38,7 +40,9 @@ start_time = time.time()
 
 model_save_path = "submissions/amazon_train0/35_amazon_train_0.pkl"
 
-res_name = 'submissions/amazon_train0/results'
+dataset_which = 'all'
+
+res_name = 'submissions/amazon_train0/results_%s' % dataset_which
 
 mdl = cPickle.load(open(model_save_path, 'rb'))
 log('opened model at ' + model_save_path)
@@ -47,9 +51,9 @@ img_size = 100
 max_offset = 1
 window = (img_size-max_offset*2, img_size-max_offset*2)
 
-Xs, _, names = load_npys('test', img_size, resizing_method='crop')
+Xs, _, names = load_npys(dataset_which, img_size, resizing_method='crop')
 Xs = Xs.reshape(Xs.shape[0], 1, np.sqrt(Xs.shape[1]), np.sqrt(Xs.shape[1]))
-Xs = np.cast[floatX](1 - Xs/255.)
+# Xs = np.cast[floatX](1 - Xs/255.)
 
 batch_size = 100
 batch_count = (Xs.shape[0]-1) // batch_size + 1
@@ -76,7 +80,7 @@ randomization_params = {
 polish_randomization_params = {
     'window': window,
     'scales': (1,),
-    'angles': (0, 90),
+    'angles': (0, 90, 180),
     'x_offsets': range(max_offset+1),
     'y_offsets': range(max_offset+1),
     'flip': True
@@ -93,14 +97,21 @@ def randomize(dataset):
 rotation_count = 10
 
 y = []
-for i in xrange(batch_count):
-    if i % 100 == 0:
-        log('doing batch %i of %i' % (i, batch_count))
-    rXs = Xs[i*batch_size:(i+1)*batch_size]
-    y0 = np.zeros((rXs.shape[0], 121), dtype=floatX)
-    for r in xrange(rotation_count):
-        y0 += f(polish_randomize(rXs))
-    y.append(y0/rotation_count)
+with ProcessPoolExecutor(max_workers=2)as ex:
+    batch_future = ex.map(polish_randomize,
+                          itertools.repeat(np.cast[floatX](1 - Xs[:batch_size]/255.), rotation_count))
+    for i in xrange(1, batch_count+1):
+        if (i-1) % 100 == 0:
+            log('doing batch %i of %i' % (i-1, batch_count))
+        rXs = batch_future
+        if i < batch_count:
+            batch_future = ex.map(randomize,
+                                  itertools.repeat(np.cast[floatX](1 - Xs[i*batch_size:(i+1)*batch_size]/255.),
+                                                   rotation_count))
+        y0 = np.zeros((Xs[(i-1)*batch_size:i*batch_size].shape[0], 121), dtype=floatX)
+        for rX in rXs:
+            y0 += f(rX)
+        y.append(y0/rotation_count)
 y = np.vstack(y)
 
 header = ['image'] + unique_labels

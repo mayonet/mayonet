@@ -153,8 +153,8 @@ class DenseLayer(ForwardPropogator):
         return self.features_count,
 
     def get_params(self):
-        return {'param': self.W, 'l2_scale': 1.0, 'lr_scale': self.lr_scale}, \
-               {'param': self.b, 'l2_scale': 0.0, 'lr_scale': self.lr_scale}
+        return {'param': self.W, 'l2_scale': 1.0, 'lr_scale': getattr(self, 'lr_scale', 1.)}, \
+               {'param': self.b, 'l2_scale': 0.0, 'lr_scale': getattr(self, 'lr_scale', 1.)}
 
     def forward(self, X, train=False):
         return self.activation(T.dot(X, self.W) + self.b)
@@ -597,9 +597,14 @@ class MLP(ForwardPropogator, LayerContainer):
     def updates(self, cost, l2_error, X, momentum=1.0, learning_rate=0.05, method='momentum', l2=0):
         updates = OrderedDict()
         for p_info in self.get_params():
-            p = p_info['param']
-            lr_scale = p_info['lr_scale'] if 'lr_scale' in p_info else 1.0
+            if isinstance(p_info, dict):
+                p = p_info['param']
+                lr_scale = p_info['lr_scale'] if 'lr_scale' in p_info else 1.0
+            else:
+                p, _ = p_info
+                lr_scale = 1.0
             lr = lr_scale * learning_rate
+
             grad = T.grad(cost + l2*l2_error, p)
             if method == 'sgd':
                 updates[p] = p - lr*grad
@@ -685,8 +690,11 @@ def soft_log_likelihood(mlp, X, Y, train=False):
 def models_l2_error(mlp):
     L = 0
     for p_info in mlp.get_params():
-        p = p_info['param']
-        l2scale = p_info['l2_scale'] if 'l2_scale' in p_info else 1.0
+        if isinstance(p_info, dict):
+            p = p_info['param']
+            l2scale = p_info['l2_scale'] if 'l2_scale' in p_info else 1.0
+        else:
+            p, l2scale = p_info
         if l2scale < 1e-12:
             continue
         L += T.sum(l2scale * p * p / 2)
