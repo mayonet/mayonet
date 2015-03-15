@@ -110,15 +110,15 @@ else:
         Flatten(),
 
         Dropout(0.6),
-        DenseLayer(3000, max_col_norm=3.5),
+        DenseLayer(3000),
         Maxout(5),
 
         Dropout(0.6),
-        DenseLayer(2500, max_col_norm=3.5),
+        DenseLayer(2500),
         Maxout(5),
 
         Dropout(0.7),
-        DenseLayer(len_out, max_col_norm=3.5),
+        DenseLayer(len_out),
         NonLinearity(activation=T.nnet.softmax)
     ], (1,) + window,  # (1,) + cropped_window  # , train_props.shape[1:]
         logger=logger)
@@ -126,7 +126,7 @@ else:
 
 ## TODO move to mlp.get_updates
 l2 = 1e-5
-learning_rate = 1e-3  # np.exp(-2)
+learning_rate = 1e-4  # np.exp(-2)
 momentum = 0.99
 epoch_count = 1000
 batch_size = 64

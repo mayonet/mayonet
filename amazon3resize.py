@@ -73,38 +73,38 @@ if os.path.isfile(model_fn) and True:
 else:
     prelu_alpha = 0.25
     mlp = MLP([
-        ConvolutionalLayer((3, 3), 16, max_kernel_norm=3.0),
+        ConvolutionalLayer((3, 3), 16),
         GaussianDropout(0.1),
         MaxPool((2, 2)),
         NonLinearity(),
 
-        ConvolutionalLayer((3, 3), 32, pad=1, max_kernel_norm=3.0),
+        ConvolutionalLayer((3, 3), 32, pad=1),
         GaussianDropout(0.2),
         MaxPool((2, 2)),
         NonLinearity(),
 
-        ConvolutionalLayer((3, 3), 64, max_kernel_norm=3.0),
+        ConvolutionalLayer((3, 3), 64),
         GaussianDropout(0.3),
         # MaxPool((2, 2)),
         NonLinearity(),
 
-        ConvolutionalLayer((3, 3), 96, max_kernel_norm=3.0),
+        ConvolutionalLayer((3, 3), 96),
         GaussianDropout(0.4),
         MaxPool((2, 2)),
         NonLinearity(),
 
-        ConvolutionalLayer((3, 3), 128, pad=1, max_kernel_norm=3.0),
+        ConvolutionalLayer((3, 3), 128, pad=1),
         GaussianDropout(0.5),
         # MaxPool((2, 2)),
         NonLinearity(),
 
 
-        ConvolutionalLayer((3, 3), 192, max_kernel_norm=3.0),
+        ConvolutionalLayer((3, 3), 192),
         GaussianDropout(0.5),
         # MaxPool((2, 2)),
         NonLinearity(),
 
-        ConvolutionalLayer((3, 3), 256, max_kernel_norm=3.0),
+        ConvolutionalLayer((3, 3), 256),
         GaussianDropout(0.5),
         MaxPool((2, 2)),
         NonLinearity(),
@@ -112,15 +112,15 @@ else:
         Flatten(),
 
         Dropout(0.6),
-        DenseLayer(3000, max_col_norm=3.5),
+        DenseLayer(3000),
         Maxout(5),
 
         Dropout(0.5),
-        DenseLayer(2500, max_col_norm=3.5),
+        DenseLayer(2500),
         Maxout(5),
 
         Dropout(0.7),
-        DenseLayer(len_out, max_col_norm=3.5),
+        DenseLayer(len_out),
         NonLinearity(activation=T.nnet.softmax)
     ], (1,) + window,  # (1,) + cropped_window  # , train_props.shape[1:]
         logger=logger)
