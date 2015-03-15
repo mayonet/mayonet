@@ -133,7 +133,7 @@ class DenseLayer(ForwardPropogator):
         self.max_col_norm = max_col_norm
         self.leaky_relu_alpha = leaky_relu_alpha
         self.irange = irange
-        self.lr_scale
+        self.lr_scale = lr_scale
 
     def setup_input(self, input_shape):
         assert len(input_shape) == 1, 'DenseLayer''s input must be 1 dimensional'
