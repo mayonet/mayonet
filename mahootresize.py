@@ -72,53 +72,53 @@ if os.path.isfile(model_fn) and True:
     mlp = cPickle.load(open(model_fn, 'rb'))
 else:
     mlp = MLP([
-        Dropout(0.8, 1),
+        Dropout(0.8),
         ConvolutionalLayer((3, 3), 16),
         MaxPool((2, 2)),
         Maxout(),
 
-        Dropout(0.8, 1),
+        Dropout(0.8),
         ConvolutionalLayer((3, 3), 32, pad=1),
         MaxPool((2, 2)),
         Maxout(),
 
-        Dropout(0.8, 1),
+        Dropout(0.8),
         ConvolutionalLayer((3, 3), 64),
         # MaxPool((2, 2)),
         Maxout(),
 
-        Dropout(0.8, 1),
+        Dropout(0.8),
         ConvolutionalLayer((3, 3), 96),
         MaxPool((2, 2)),
         Maxout(),
 
-        Dropout(0.8, 1),
+        Dropout(0.8),
         ConvolutionalLayer((3, 3), 128, pad=1),
         # MaxPool((2, 2)),
         Maxout(),
 
-        Dropout(0.8, 1),
+        Dropout(0.8),
         ConvolutionalLayer((3, 3), 192),
         # MaxPool((2, 2)),
         Maxout(),
 
-        Dropout(0.8, 1),
+        Dropout(0.8),
         ConvolutionalLayer((3, 3), 256),
         MaxPool((2, 2)),
         Maxout(),
 
         Flatten(),
 
-        Dropout(0.6, 1),
-        DenseLayer(3000, max_col_norm=3.5),
+        Dropout(0.6),
+        DenseLayer(3000),
         Maxout(5),
 
-        Dropout(0.6, 1),
-        DenseLayer(2500, max_col_norm=3.5),
+        Dropout(0.6),
+        DenseLayer(2500),
         Maxout(5),
 
         Dropout(0.7),
-        DenseLayer(len_out, max_col_norm=3.5),
+        DenseLayer(len_out),
         NonLinearity(activation=T.nnet.softmax)
     ], (1,) + window,  # (1,) + cropped_window  # , train_props.shape[1:]
         logger=logger)
@@ -126,7 +126,7 @@ else:
 
 ## TODO move to mlp.get_updates
 l2 = 1e-5
-learning_rate = 1e-3  # np.exp(-2)
+learning_rate = 1e-4  # np.exp(-2)
 momentum = 0.99
 epoch_count = 1000
 batch_size = 64
@@ -135,7 +135,7 @@ learning_decay = 0.5 ** (1./(100 * minibatch_count))
 momentum_decay = 1  # 0.5 ** (1./(1000 * minibatch_count))
 lr_min = 1e-15
 mm_min = 0.5
-valid_rnd_count = 10
+valid_rnd_count = 1
 
 method = 'nesterov'
 

@@ -51,10 +51,6 @@ valid_x = valid_x.reshape((valid_x.shape[0], 1, np.sqrt(valid_x.shape[1]), np.sq
 train_x = np.cast[floatX](1 - train_x/255.)
 valid_x = np.cast[floatX](1 - valid_x/255.)
 
-cropped_size = 40
-cropped_offset = 1
-cropped_window = (cropped_size-2*cropped_offset, cropped_size-2*cropped_offset)
-
 len_in = train_x.shape[1]
 len_out = train_y.shape[1]
 
@@ -78,52 +74,52 @@ else:
     prelu_alpha = 0.25
     mlp = MLP([
         GaussianDropout(0.3),
-        ConvolutionalLayer((3, 3), 16, max_kernel_norm=3.0),
+        ConvolutionalLayer((3, 3), 16),
         MaxPool((2, 2)),
         NonLinearity(),
 
         GaussianDropout(0.4),
-        ConvolutionalLayer((3, 3), 32, pad=1, max_kernel_norm=3.0),
+        ConvolutionalLayer((3, 3), 32, pad=1),
         MaxPool((2, 2)),
         NonLinearity(),
 
         GaussianDropout(0.5),
-        ConvolutionalLayer((3, 3), 64, max_kernel_norm=3.0),
+        ConvolutionalLayer((3, 3), 64),
         # MaxPool((2, 2)),
         NonLinearity(),
 
         GaussianDropout(0.5),
-        ConvolutionalLayer((3, 3), 96, max_kernel_norm=3.0),
+        ConvolutionalLayer((3, 3), 96),
         MaxPool((2, 2)),
         NonLinearity(),
 
         GaussianDropout(0.5),
-        ConvolutionalLayer((3, 3), 128, pad=1, max_kernel_norm=3.0),
+        ConvolutionalLayer((3, 3), 128, pad=1),
         # MaxPool((2, 2)),
         NonLinearity(),
 
         GaussianDropout(0.5),
-        ConvolutionalLayer((3, 3), 192, max_kernel_norm=3.0),
+        ConvolutionalLayer((3, 3), 192),
         # MaxPool((2, 2)),
         NonLinearity(),
 
         GaussianDropout(0.6),
-        ConvolutionalLayer((3, 3), 256, max_kernel_norm=3.0),
+        ConvolutionalLayer((3, 3), 256),
         MaxPool((2, 2)),
         NonLinearity(),
 
         Flatten(),
 
         GaussianDropout(1.0),
-        DenseLayer(3000, max_col_norm=3.5),
+        DenseLayer(3000),
         Maxout(5),
 
         GaussianDropout(1.0),
-        DenseLayer(2500, max_col_norm=3.5),
+        DenseLayer(2500),
         Maxout(5),
 
         GaussianDropout(1.0),
-        DenseLayer(len_out, max_col_norm=3.5),
+        DenseLayer(len_out),
         NonLinearity(activation=T.nnet.softmax)
     ], (1,) + window,  # (1,) + cropped_window  # , train_props.shape[1:]
         logger=logger)
@@ -131,7 +127,7 @@ else:
 
 ## TODO move to mlp.get_updates
 l2 = 1e-5
-learning_rate = 1e-3  # np.exp(-2)
+learning_rate = 5e-4  # np.exp(-2)
 momentum = 0.99
 epoch_count = 1000
 batch_size = 64
@@ -140,7 +136,7 @@ learning_decay = 0.5 ** (1./(100 * minibatch_count))
 momentum_decay = 1  # 0.5 ** (1./(1000 * minibatch_count))
 lr_min = 1e-15
 mm_min = 0.5
-valid_rnd_count = 10
+valid_rnd_count = 1
 
 method = 'nesterov'
 
@@ -162,8 +158,8 @@ cropped_randomization_params = {
     'window': window,
     'scales': (1,),
     'angles': (0, 90, 180, 270),
-    'x_offsets': range(cropped_offset+1),
-    'y_offsets': range(cropped_offset+1),
+    'x_offsets': range(max_offset+1),
+    'y_offsets': range(max_offset+1),
     'flip': True
 }
 print(randomization_params, file=logger)

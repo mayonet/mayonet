@@ -114,15 +114,15 @@ else:
         Flatten(),
 
         GaussianDropout(1),
-        DenseLayer(2500, max_col_norm=3.5),
+        DenseLayer(2500),
         Maxout(5),
 
         GaussianDropout(1),
-        DenseLayer(2500, max_col_norm=3.5),
+        DenseLayer(2500),
         Maxout(5),
 
         GaussianDropout(1),
-        DenseLayer(len_out, max_col_norm=3.5),
+        DenseLayer(len_out),
         NonLinearity(activation=T.nnet.softmax)
     ], (1,) + window,  # (1,) + cropped_window  # , train_props.shape[1:]
         logger=logger)
@@ -130,7 +130,7 @@ else:
 
 ## TODO move to mlp.get_updates
 l2 = 1e-5
-learning_rate = 1e-3  # np.exp(-2)
+learning_rate = 1e-4  # np.exp(-2)
 momentum = 0.99
 epoch_count = 1000
 batch_size = 64
@@ -139,7 +139,7 @@ learning_decay = 0.5 ** (1./(100 * minibatch_count))
 momentum_decay = 1  # 0.5 ** (1./(1000 * minibatch_count))
 lr_min = 1e-15
 mm_min = 0.5
-valid_rnd_count = 10
+valid_rnd_count = 1
 
 method = 'nesterov'
 
