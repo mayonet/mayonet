@@ -45,7 +45,7 @@ csvs = ['/home/yoptar/git/subway-plankton/submissions/igipop_polished_40/results
         # '/home/yoptar/git/subway-plankton/normalized_properties.csv.gz'
         ]
 
-_, train_y, train_names = load_npys('all', 1, 'crop')
+_, train_y, train_names = load_npys('train', 1, 'crop')
 _, valid_y, valid_names = load_npys('valid', 1, 'crop')
 
 train_x = prepare_features(train_names, csvs, floatX)
@@ -59,11 +59,11 @@ if os.path.isfile(model_fn) and True:
 else:
     prelu_alpha = 0.25
     mlp = MLP([
-        Dropout(0.8),
+        GaussianDropout(0.03),
         DenseLayer(2000),
         PReLU(prelu_alpha),
 
-        Dropout(0.5),
+        GaussianDropout(0.5),
         DenseLayer(2000, leaky_relu_alpha=prelu_alpha),
         PReLU(prelu_alpha),
 

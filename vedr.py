@@ -63,9 +63,9 @@ cost = neg_log_likelihood
 valid_cost = cost
 train_y_modifier = identity
 
-# print('merging train and valid')
-# train_x = np.vstack((train_x, valid_x))
-# train_y = np.vstack((train_y, valid_y))
+print('merging train and valid')
+train_x = np.vstack((train_x, valid_x))
+train_y = np.vstack((train_y, valid_y))
 
 if os.path.isfile(model_fn) and True:
     logger.write('Loading model from %s...' % model_fn)
@@ -148,7 +148,7 @@ else:
 
 ## TODO move to mlp.get_updates
 l2 = 0  # 1e-4
-learning_rate = 1e-4  # np.exp(-2)
+learning_rate = 6.5e-5  # np.exp(-2)
 momentum = 0.99
 epoch_count = 1000
 batch_size = 32
