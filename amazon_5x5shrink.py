@@ -87,35 +87,35 @@ else:
         GaussianDropout(0.03),
         ConvolutionalLayer((5, 5), 32, leaky_relu_alpha=1),
         MaxPool((2, 2)),
-        PReLU(prelu_alpha),
+        NonLinearity(),
 
         # 24 -> 12
         GaussianDropout(0.03),
         ConvolutionalLayer((5, 5), 64, pad=2, leaky_relu_alpha=prelu_alpha),
         MaxPool((2, 2)),
-        PReLU(prelu_alpha),
+        NonLinearity(),
 
         # 12 -> 6
         GaussianDropout(0.03),
         ConvolutionalLayer((5, 5), 128, pad=2, leaky_relu_alpha=prelu_alpha),
         MaxPool((2, 2)),
-        PReLU(prelu_alpha),
+        NonLinearity(),
 
         # 6 -> 3
         GaussianDropout(0.03),
         ConvolutionalLayer((5, 5), 256, pad=2, leaky_relu_alpha=prelu_alpha),
         MaxPool((2, 2)),
-        PReLU(prelu_alpha),
+        NonLinearity(),
 
         Flatten(),
 
         Dropout(0.5),
         DenseLayer(2000, leaky_relu_alpha=prelu_alpha),
-        PReLU(prelu_alpha),
+        NonLinearity(),
 
         Dropout(0.5),
         DenseLayer(2000, leaky_relu_alpha=prelu_alpha),
-        PReLU(prelu_alpha),
+        NonLinearity(),
 
         Dropout(0.5),
         DenseLayer(len_out, leaky_relu_alpha=prelu_alpha),
