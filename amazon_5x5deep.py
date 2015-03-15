@@ -181,7 +181,7 @@ print(randomization_params, file=logger)
 
 
 def randomize(dataset):
-    return randomize_dataset_bc01(dataset[0], **randomization_params),
+    return [randomize_dataset_bc01(dataset[0], **randomization_params)]
            # randomize_dataset_bc01(dataset[1], **cropped_randomization_params))
     # return map(lambda ds: randomize_dataset_bc01(ds, **randomization_params) if ds.ndim == 4 else ds, dataset)
 
