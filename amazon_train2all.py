@@ -37,7 +37,7 @@ logger = Logger(logger_name)
 np.random.seed(1100)
 
 dtype_y = 'uint8'
-model_fn = 'amazon_train_2.pkl'
+model_fn = 'amazon_train2all.pkl'
 
 img_size = 100
 max_offset = 1
