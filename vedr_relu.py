@@ -187,11 +187,11 @@ print(randomization_params, file=logger)
 
 
 def polish_randomize(dataset):
-    return randomize_dataset_bc01(dataset[0], **polish_randomization_params),
+    return [randomize_dataset_bc01(dataset[0], **polish_randomization_params)]
 
 
 def randomize(dataset):
-    return randomize_dataset_bc01(dataset[0], **randomization_params),
+    return [randomize_dataset_bc01(dataset[0], **randomization_params)]
 
 tr = Trainer(mlp, batch_size, learning_rate, train_x, train_y, valid_X=valid_x, valid_y=valid_y, method=method,
              momentum=momentum, lr_decay=learning_decay, lr_min=lr_min, l2=l2, mm_decay=momentum_decay, mm_min=mm_min,
