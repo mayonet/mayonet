@@ -43,8 +43,8 @@ img_size = 100
 max_offset = 1
 window = (img_size-2*max_offset, img_size-2*max_offset)
 
-train_x, train_y, train_names = load_npys(which_set='train', image_size=img_size, resizing_method='bluntresize')
-valid_x, valid_y, valid_names = load_npys(which_set='valid', image_size=img_size, resizing_method='bluntresize')
+train_x, train_y, train_names = load_npys(which_set='all', image_size=img_size, resizing_method='bluntresize', seed=991)
+valid_x, valid_y, valid_names = load_npys(which_set='valid', image_size=img_size, resizing_method='bluntresize', seed=991)
 
 train_x = train_x.reshape((train_x.shape[0], 1, np.sqrt(train_x.shape[1]), np.sqrt(train_x.shape[1])))
 valid_x = valid_x.reshape((valid_x.shape[0], 1, np.sqrt(valid_x.shape[1]), np.sqrt(valid_x.shape[1])))
@@ -58,21 +58,13 @@ cropped_window = (cropped_size-2*cropped_offset, cropped_size-2*cropped_offset)
 len_in = train_x.shape[1]
 len_out = train_y.shape[1]
 
-
 unique_labels = read_labels()
 n_classes = len(unique_labels)
 label_to_int = {unique_labels[i]: i for i in range(n_classes)}
 
-
-
-
 cost = neg_log_likelihood
 valid_cost = cost
 train_y_modifier = identity
-
-# print('merging train and valid')
-# train_x = np.vstack((train_x, valid_x))
-# train_y = np.vstack((train_y, valid_y))
 
 if os.path.isfile(model_fn) and True:
     logger.write('Loading model from %s...' % model_fn)
@@ -93,7 +85,6 @@ else:
 
             GaussianDropout(0.03),
             ConvolutionalLayer((3, 3), 64, leaky_relu_alpha=prelu_alpha),
-            # MaxPool((2, 2)),
             NonLinearity(),
 
             GaussianDropout(0.03),
@@ -105,12 +96,10 @@ else:
         MLP([
             GaussianDropout(0.03),
             ConvolutionalLayer((3, 3), 128, pad=1),
-            # MaxPool((2, 2)),
             NonLinearity(),
 
             GaussianDropout(0.03),
             ConvolutionalLayer((3, 3), 192),
-            # MaxPool((2, 2)),
             NonLinearity(),
 
             GaussianDropout(0.03),
