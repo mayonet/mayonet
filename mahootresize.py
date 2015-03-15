@@ -72,48 +72,48 @@ if os.path.isfile(model_fn) and True:
     mlp = cPickle.load(open(model_fn, 'rb'))
 else:
     mlp = MLP([
-        Dropout(0.8, 1),
+        Dropout(0.8),
         ConvolutionalLayer((3, 3), 16),
         MaxPool((2, 2)),
         Maxout(),
 
-        Dropout(0.8, 1),
+        Dropout(0.8),
         ConvolutionalLayer((3, 3), 32, pad=1),
         MaxPool((2, 2)),
         Maxout(),
 
-        Dropout(0.8, 1),
+        Dropout(0.8),
         ConvolutionalLayer((3, 3), 64),
         # MaxPool((2, 2)),
         Maxout(),
 
-        Dropout(0.8, 1),
+        Dropout(0.8),
         ConvolutionalLayer((3, 3), 96),
         MaxPool((2, 2)),
         Maxout(),
 
-        Dropout(0.8, 1),
+        Dropout(0.8),
         ConvolutionalLayer((3, 3), 128, pad=1),
         # MaxPool((2, 2)),
         Maxout(),
 
-        Dropout(0.8, 1),
+        Dropout(0.8),
         ConvolutionalLayer((3, 3), 192),
         # MaxPool((2, 2)),
         Maxout(),
 
-        Dropout(0.8, 1),
+        Dropout(0.8),
         ConvolutionalLayer((3, 3), 256),
         MaxPool((2, 2)),
         Maxout(),
 
         Flatten(),
 
-        Dropout(0.6, 1),
+        Dropout(0.6),
         DenseLayer(3000, max_col_norm=3.5),
         Maxout(5),
 
-        Dropout(0.6, 1),
+        Dropout(0.6),
         DenseLayer(2500, max_col_norm=3.5),
         Maxout(5),
 
