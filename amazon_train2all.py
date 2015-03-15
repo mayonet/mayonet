@@ -34,7 +34,7 @@ logger_name = time.strftime("%Y-%m-%dT%H-%M-%S.log")
 logger = Logger(logger_name)
 
 
-np.random.seed(1100)
+np.random.seed(11088)
 
 dtype_y = 'uint8'
 model_fn = 'amazon_train2all.pkl'
