@@ -139,7 +139,7 @@ learning_decay = 0.5 ** (1./(100 * minibatch_count))
 momentum_decay = 1  # 0.5 ** (1./(1000 * minibatch_count))
 lr_min = 1e-15
 mm_min = 0.5
-valid_rnd_count = 10
+valid_rnd_count = 1
 
 method = 'nesterov'
 

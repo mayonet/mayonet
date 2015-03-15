@@ -7,7 +7,7 @@ from dataset import read_labels, iterate_train_data_names
 from hierarchy import heated_targetings
 from np_dataset import load_npys
 import theano
-# theano.config.compute_test_value = 'wa    rn'
+# theano.config.compute_test_value = 'warn'
 from rotator import randomize_dataset_bc01
 
 # theano.config.exception_verbosity = 'high'
