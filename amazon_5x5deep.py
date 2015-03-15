@@ -113,26 +113,26 @@ else:
         GaussianDropout(0.5), 
         DenseLayer(1200),
         BatchNormalization(),
-        NonLinearity(),
+        PReLU(prelu_alpha),
 
         GaussianDropout(0.5), 
         DenseLayer(1200),
         BatchNormalization(),
-        NonLinearity(),
+        PReLU(prelu_alpha),
 
         GaussianDropout(0.5), 
         DenseLayer(1200),
         BatchNormalization(),
-        NonLinearity(),
+        PReLU(prelu_alpha),
 
         GaussianDropout(0.5), 
         DenseLayer(1200),
         BatchNormalization(),
-        NonLinearity(),
+        PReLU(prelu_alpha),
 
         GaussianDropout(0.5), 
         DenseLayer(1200),
-        NonLinearity(),
+        PReLU(prelu_alpha),
 
         GaussianDropout(0.5), 
         DenseLayer(len_out),
