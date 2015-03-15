@@ -73,54 +73,53 @@ if os.path.isfile(model_fn) and True:
 else:
     prelu_alpha = 0.25
     mlp = MLP([
-        GaussianDropout(0.1),
         ConvolutionalLayer((3, 3), 16, max_kernel_norm=3.0),
+        GaussianDropout(0.1),
         MaxPool((2, 2)),
         NonLinearity(),
 
-        GaussianDropout(0.1),
         ConvolutionalLayer((3, 3), 32, pad=1, max_kernel_norm=3.0),
+        GaussianDropout(0.2),
         MaxPool((2, 2)),
         NonLinearity(),
 
-        GaussianDropout(0.1),
         ConvolutionalLayer((3, 3), 64, max_kernel_norm=3.0),
+        GaussianDropout(0.3),
         # MaxPool((2, 2)),
         NonLinearity(),
 
-        GaussianDropout(0.1),
         ConvolutionalLayer((3, 3), 96, max_kernel_norm=3.0),
+        GaussianDropout(0.4),
         MaxPool((2, 2)),
         NonLinearity(),
 
-        Dropout(0.9),
         ConvolutionalLayer((3, 3), 128, pad=1, max_kernel_norm=3.0),
+        GaussianDropout(0.5),
         # MaxPool((2, 2)),
         NonLinearity(),
 
-        Dropout(0.8),
-        GaussianDropout(0.01),
+
         ConvolutionalLayer((3, 3), 192, max_kernel_norm=3.0),
+        GaussianDropout(0.5),
         # MaxPool((2, 2)),
         NonLinearity(),
 
-        Dropout(0.7),
-        GaussianDropout(0.005),
         ConvolutionalLayer((3, 3), 256, max_kernel_norm=3.0),
+        GaussianDropout(0.5),
         MaxPool((2, 2)),
         NonLinearity(),
 
         Flatten(),
 
-        Dropout(0.6, 1),
+        Dropout(0.6),
         DenseLayer(3000, max_col_norm=3.5),
         Maxout(5),
 
-        Dropout(0.5, 1),
+        Dropout(0.5),
         DenseLayer(2500, max_col_norm=3.5),
         Maxout(5),
 
-        Dropout(0.6),
+        Dropout(0.7),
         DenseLayer(len_out, max_col_norm=3.5),
         NonLinearity(activation=T.nnet.softmax)
     ], (1,) + window,  # (1,) + cropped_window  # , train_props.shape[1:]
@@ -129,7 +128,7 @@ else:
 
 ## TODO move to mlp.get_updates
 l2 = 1e-5
-learning_rate = 1e-3  # np.exp(-2)
+learning_rate = 5e-4  # np.exp(-2)
 momentum = 0.99
 epoch_count = 1000
 batch_size = 64
