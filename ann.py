@@ -153,7 +153,8 @@ class DenseLayer(ForwardPropogator):
         return self.features_count,
 
     def get_params(self):
-        return (self.W, 1), (self.b, 0)
+        return {'param': self.W, 'l2_scale': 1.0, 'lr_scale': self.lr_scale}, \
+               {'param': self.b, 'l2_scale': 0.0, 'lr_scale': self.lr_scale}
 
     def forward(self, X, train=False):
         return self.activation(T.dot(X, self.W) + self.b)
@@ -177,7 +178,7 @@ class DenseDecoder(ForwardPropogator):
         if self.untied_bias:
             self.b_prime = theano.shared(np.zeros((1, self.encoding_layer.W.get_value().shape[0]), dtype=theano.config.floatX), borrow=True,
                                          broadcastable=(True, False))
-            self.params = (self.b_prime, 0),
+            self.params = {'param': self.b_prime, 'l2_scale': 0},
         else:
             self.b_prime = 0
             self.params = ()
@@ -233,7 +234,7 @@ class PReLU(ForwardPropogator):
         return input_shape
 
     def get_params(self):
-        return (self.alpha, 0),
+        return {'param': self.alpha, 'l2_scale': 0},
 
     def forward(self, X, train=False):
         return T.maximum(0, X) + self.alpha*T.minimum(0, X)
@@ -245,9 +246,6 @@ class NonLinearity(ForwardPropogator):
 
     def setup_input(self, input_shape):
         return input_shape
-
-    def get_params(self):
-        return ()
 
     def forward(self, X, train=False):
         return self.activation(X)
@@ -322,7 +320,7 @@ class BatchNormalization(ForwardPropogator):
         return input_shape
 
     def get_params(self):
-        return (self.gamma, 1), (self.beta, 0)
+        return {'param': self.gamma, 'l2_scale': 1}, {'param': self.beta, 'l2_scale': 0}
 
     def forward(self, X, train=False):
         mean = self.MA
@@ -358,7 +356,7 @@ class ConvBNOnChannel(ForwardPropogator):
         return input_shape
 
     def get_params(self):
-        return (self.gamma, 1), (self.beta, 0)
+        return {'param': self.gamma, 'l2_scale': 1}, {'param': self.beta, 'l2_scale': 0}
 
     def forward(self, X, train=False):
         mean = self.MA
@@ -393,7 +391,7 @@ class ConvBNOnPixels(ForwardPropogator):
         return input_shape
 
     def get_params(self):
-        return (self.gamma, 1), (self.beta, 0)
+        return {'param': self.gamma, 'l2_scale': 1}, {'param': self.beta, 'l2_scale': 0}
 
     def forward(self, X, train=False):
         mean = self.MA
@@ -446,9 +444,9 @@ class ConvolutionalLayer(ForwardPropogator):
             self.b = theano.shared(np.zeros((1, self.features_count, out_image_size, out_image_size),
                                             dtype=theano.config.floatX),
                                    borrow=True, broadcastable=(True, False, False, False))
-            self.params = (self.W, 1), (self.b, 0)
+            self.params = {'param': self.W, 'l2_scale': 1}, {'param': self.b, 'l2_scale': 0},
         else:
-            self.params = (self.W, 1),
+            self.params = {'param': self.W, 'l2_scale': 1},
             self.b = 0
 
         self.output_shape = self.features_count, out_image_size, out_image_size
@@ -481,9 +479,6 @@ class MaxPool(ForwardPropogator):
         # return chans, (rows-1) // self.window[0] + 1, (cols-1) // self.window[1] + 1
         return chans, (rows-self.window[0]) // self.stride[0] + 1, (cols-self.window[0]) // self.stride[0] + 1
 
-    def get_params(self):
-        return ()
-
     def forward(self, X, train=False):
         return pool_2d(X, ws=self.window, stride=self.stride)
 
@@ -494,9 +489,6 @@ class Flatten(ForwardPropogator):
 
     def setup_input(self, input_shape):
         return np.prod(input_shape),
-
-    def get_params(self):
-        return ()
 
 
 class Reshape(ForwardPropogator):
@@ -509,9 +501,6 @@ class Reshape(ForwardPropogator):
     def forward(self, X, train=False):
         batch_size = X.shape[0]
         return T.reshape(X, (batch_size,) + self.shape)
-
-    def get_params(self):
-        return ()
 
 
 class Dropout(ForwardPropogator):
@@ -532,9 +521,6 @@ class Dropout(ForwardPropogator):
         self.mask = T.shared_randomstreams.RandomStreams()
         return input_shape
 
-    def get_params(self):
-        return ()
-
 
 class GaussianDropout(ForwardPropogator):
     def __init__(self, std):
@@ -551,9 +537,6 @@ class GaussianDropout(ForwardPropogator):
         self.mask = T.shared_randomstreams.RandomStreams()
         return input_shape
 
-    def get_params(self):
-        return ()
-
 
 class Maxout(ForwardPropogator):
     def __init__(self, pieces=2,
@@ -569,9 +552,6 @@ class Maxout(ForwardPropogator):
         self.input_shape = input_shape
         self.output_num = self.input_shape[0] // self.pieces
         return (self.output_num,) + self.input_shape[1:]
-
-    def get_params(self):
-        return ()
 
     def forward(self, X, train=False):
         Xs = T.reshape(X, (X.shape[0], self.pieces, self.output_num) + self.input_shape[1:])
@@ -616,15 +596,18 @@ class MLP(ForwardPropogator, LayerContainer):
 
     def updates(self, cost, l2_error, X, momentum=1.0, learning_rate=0.05, method='momentum', l2=0):
         updates = OrderedDict()
-        for p, l2scale in self.get_params():
+        for p_info in self.get_params():
+            p = p_info['param']
+            lr_scale = p_info['lr_scale'] if 'lr_scale' in p_info else 1.0
+            lr = lr_scale * learning_rate
             grad = T.grad(cost + l2*l2_error, p)
             if method == 'sgd':
-                updates[p] = p - learning_rate*grad
+                updates[p] = p - lr*grad
             elif method == 'adagrad':
                 grad_acc = theano.shared(np.zeros(p.get_value().shape, dtype=theano.config.floatX),
                                          broadcastable=p.broadcastable, borrow=True)
                 updates[grad_acc] = grad_acc + grad**2
-                lr_p = T.clip(learning_rate/T.sqrt(updates[grad_acc] + 1e-7), 1e-6, 50)
+                lr_p = T.clip(lr/T.sqrt(updates[grad_acc] + 1e-7), 1e-6, 50)
                 updates[p] = p - lr_p*grad
             elif method == 'adadelta':
                 grad_acc = theano.shared(np.zeros(p.get_value().shape, dtype=theano.config.floatX),
@@ -632,7 +615,7 @@ class MLP(ForwardPropogator, LayerContainer):
                 weight_acc = theano.shared(np.zeros(p.get_value().shape, dtype=theano.config.floatX),
                                            broadcastable=p.broadcastable, borrow=True)
                 updates[grad_acc] = 0.9*grad_acc + 0.1*(grad**2)
-                lr_p = learning_rate*T.sqrt(weight_acc + 1e-7)/T.sqrt(updates[grad_acc] + 1e-7)
+                lr_p = lr*T.sqrt(weight_acc + 1e-7)/T.sqrt(updates[grad_acc] + 1e-7)
                 delta_p = -lr_p*grad
                 updates[p] = p + delta_p
                 updates[weight_acc] = 0.9*weight_acc + 0.1*delta_p**2
@@ -643,7 +626,7 @@ class MLP(ForwardPropogator, LayerContainer):
                                            broadcastable=p.broadcastable, borrow=True)
                 vel = theano.shared(p.get_value()*0., broadcastable=p.broadcastable)
                 updates[grad_acc] = 0.9*grad_acc + 0.1*(grad**2)
-                lr_p = learning_rate*T.sqrt(weight_acc + 1e-7)/T.sqrt(updates[grad_acc] + 1e-7)
+                lr_p = lr*T.sqrt(weight_acc + 1e-7)/T.sqrt(updates[grad_acc] + 1e-7)
                 updates[vel] = momentum*vel - lr_p*grad
                 updates[vel] = momentum*updates[vel] - lr_p*grad
                 updates[p] = p + updates[vel]
@@ -652,7 +635,7 @@ class MLP(ForwardPropogator, LayerContainer):
                 mean_square = theano.shared(np.zeros(p.get_value().shape, dtype=theano.config.floatX),
                                             broadcastable=p.broadcastable, borrow=True)
                 updates[mean_square] = 0.9*mean_square + 0.1*(grad**2)
-                lr_p = T.clip(learning_rate/T.sqrt(updates[mean_square] + 1e-7), 1e-6, 50)
+                lr_p = T.clip(lr/T.sqrt(updates[mean_square] + 1e-7), 1e-6, 50)
                 updates[p] = p - lr_p*grad
             # elif method == 'esgd':
             #     D = theano.shared(np.zeros(p.get_value().shape, dtype=theano.config.floatX),
@@ -666,9 +649,9 @@ class MLP(ForwardPropogator, LayerContainer):
 
             elif method in ('momentum', 'nesterov'):
                 vel = theano.shared(p.get_value()*0., broadcastable=p.broadcastable, borrow=True)
-                updates[vel] = momentum*vel - learning_rate*grad
+                updates[vel] = momentum*vel - lr*grad
                 if method == 'nesterov':
-                    updates[vel] = momentum*updates[vel] - learning_rate*grad
+                    updates[vel] = momentum*updates[vel] - lr*grad
                 updates[p] = p + updates[vel]
             else:
                 raise AssertionError('invalid method: %s' % method)
@@ -700,12 +683,13 @@ def soft_log_likelihood(mlp, X, Y, train=False):
 
 
 def models_l2_error(mlp):
-    L = None
-    for p, l2scale in mlp.get_params():
-        if L is None:
-            L = T.sum(l2scale * p * p / 2)
-        else:
-            L += T.sum(l2scale * p * p / 2)
+    L = 0
+    for p_info in mlp.get_params():
+        p = p_info['param']
+        l2scale = p_info['l2_scale'] if 'l2_scale' in p_info else 1.0
+        if l2scale < 1e-12:
+            continue
+        L += T.sum(l2scale * p * p / 2)
     return L
 
 
@@ -786,7 +770,7 @@ def Trainer(model, batch_size, learning_rate, train_X, train_y, valid_X=None, va
                     if len(k_next) > 0:
                         batch_future = ex.submit(train_augmentation, [d[k_next] for d in train_X])
                     batch_y = epoch_train_y[k]
-                    batch_nll = float(train_model(*batch_x + (batch_y,)))
+                    batch_nll = float(train_model(*(batch_x + [batch_y])))
                     batch_nlls.append(batch_nll)
                 train_nll = np.mean(batch_nlls)
                 # del r_train_x  # Try to free up some memory

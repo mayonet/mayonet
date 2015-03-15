@@ -33,7 +33,7 @@ import cPickle
 with gzip.open('mnist.pkl.gz', 'rb') as f:
     train_set, valid_set, test_set = cPickle.load(f)
 
-dtype_y = 'int32'
+dtype_y = 'int8'
 
 
 def to_img(rows, channels_count=1):
@@ -41,7 +41,7 @@ def to_img(rows, channels_count=1):
     n = rows.shape[0]
     size = math.sqrt(rows.shape[1] // channels_count)
     assert size*size == rows.shape[1] // channels_count
-    return rows.reshape(n, channels_count, size, size)
+    return np.cast[floatX](rows.reshape(n, channels_count, size, size))
 
 train_x = to_img(train_set[0])
 train_y = convert_to_one_hot(train_set[1], dtype=dtype_y)
@@ -120,7 +120,7 @@ momentum_decay = 0.5 ** (1./(300 * minibatch_count))
 lr_min = 1e-6
 mm_min = 0.4
 
-method = 'adadelta+nesterov'
+method = 'adadelta'
 
 print('batch=%d, l2=%f, method=%s\nlr=%f, lr_decay=%f,\nmomentum=%f, momentum_decay=%f' %
       (batch_size, l2, method, learning_rate, learning_decay, momentum, momentum_decay))
