@@ -409,7 +409,7 @@ class ConvBNOnPixels(ForwardPropogator):
 
 class ConvolutionalLayer(ForwardPropogator):
     def __init__(self, window, features_count, train_bias=True, border_mode='valid', pad=0,
-                 max_kernel_norm=None, leaky_relu_alpha=0, irange=None):
+                 max_kernel_norm=None, leaky_relu_alpha=0, irange=None, stride=(1, 1)):
         assert border_mode in ('valid', 'full'), 'Border mode must be "valid" or "full"'
         self.features_count = features_count
         self.window = window
@@ -419,6 +419,7 @@ class ConvolutionalLayer(ForwardPropogator):
         self.max_kernel_norm = max_kernel_norm
         self.leaky_relu_alpha = leaky_relu_alpha
         self.irange = irange
+        self.stride = stride
 
     def setup_input(self, input_shape):
         """input_shape=('c', 0, 1)"""
@@ -427,7 +428,8 @@ class ConvolutionalLayer(ForwardPropogator):
         self.channels = input_shape[0]
         self.filter_shape = (self.features_count, self.channels) + self.window
 
-        out_image_size = img_size+self.pad*2
+        stride = self.stride[0]
+        out_image_size = (img_size+self.pad*2) // stride
         if self.border_mode == 'valid':
             out_image_size += -self.window[0] + 1
         if self.border_mode == 'full':
@@ -458,7 +460,7 @@ class ConvolutionalLayer(ForwardPropogator):
     def forward(self, X, train=False):
         X0 = T.zeros((X.shape[0], X.shape[1], X.shape[2]+self.pad*2, X.shape[3]+self.pad*2))
         X0 = T.set_subtensor(X0[:, :, self.pad:X.shape[2]+self.pad, self.pad:X.shape[3]+self.pad], X)
-        return conv2d(X0, self.W, filter_shape=self.filter_shape, border_mode=self.border_mode) + self.b
+        return conv2d(X0, self.W, filter_shape=self.filter_shape, border_mode=self.border_mode, subsample=self.stride) + self.b
 
     def self_update(self, X, updates):
         if self.max_kernel_norm is not None:
