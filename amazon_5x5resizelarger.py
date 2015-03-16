@@ -37,7 +37,7 @@ logger = Logger(logger_name)
 np.random.seed(1147)
 
 dtype_y = 'uint8'
-model_fn = 'amazon_5x5shrink.pkl'
+model_fn = 'amazon_5x5resizelarger.pkl'
 
 img_size = 128
 max_offset = 10
