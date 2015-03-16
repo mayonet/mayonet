@@ -409,7 +409,7 @@ class ConvBNOnPixels(ForwardPropogator):
 
 class ConvolutionalLayer(ForwardPropogator):
     def __init__(self, window, features_count, train_bias=True, border_mode='valid', pad=0,
-                 max_kernel_norm=None, leaky_relu_alpha=0, irange=None):
+                 max_kernel_norm=None, leaky_relu_alpha=0, irange=None, stride=(1, 1)):
         assert border_mode in ('valid', 'full'), 'Border mode must be "valid" or "full"'
         self.features_count = features_count
         self.window = window
