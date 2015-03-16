@@ -63,9 +63,9 @@ cost = neg_log_likelihood
 valid_cost = cost
 train_y_modifier = identity
 
-# print('merging train and valid')
-# train_x = np.vstack((train_x, valid_x))
-# train_y = np.vstack((train_y, valid_y))
+print('merging train and valid')
+train_x = np.vstack((train_x, valid_x))
+train_y = np.vstack((train_y, valid_y))
 
 if os.path.isfile(model_fn) and True:
     logger.write('Loading model from %s...' % model_fn)
@@ -148,7 +148,7 @@ else:
 
 ## TODO move to mlp.get_updates
 l2 = 0  # 1e-4
-learning_rate = 8e-4  # np.exp(-2)
+learning_rate = 6.5e-5  # np.exp(-2)
 momentum = 0.99
 epoch_count = 1000
 batch_size = 32
@@ -187,11 +187,11 @@ print(randomization_params, file=logger)
 
 
 def polish_randomize(dataset):
-    return randomize_dataset_bc01(dataset[0], **polish_randomization_params),
+    return [randomize_dataset_bc01(dataset[0], **polish_randomization_params)]
 
 
 def randomize(dataset):
-    return randomize_dataset_bc01(dataset[0], **randomization_params),
+    return [randomize_dataset_bc01(dataset[0], **randomization_params)]
 
 tr = Trainer(mlp, batch_size, learning_rate, train_x, train_y, valid_X=valid_x, valid_y=valid_y, method=method,
              momentum=momentum, lr_decay=learning_decay, lr_min=lr_min, l2=l2, mm_decay=momentum_decay, mm_min=mm_min,

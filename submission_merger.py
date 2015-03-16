@@ -4,10 +4,10 @@ import pandas as pd
 import sys
 
 csvs = {'/home/yoptar/git/subway-plankton/submissions/amazon_train_2.polished/results.csv.gz': 1.0,
-        '/home/yoptar/git/subway-plankton/submissions/amazon_train0/results.csv.gz': 1.0,
+        '/home/yoptar/git/subway-plankton/submissions/igipop_polished_40/results.csv.gz': 1.0,
         '/home/yoptar/git/subway-plankton/submissions/amazon_train1/results.csv.gz': 1.0}
 
-out_file_name = 'amazon_train_1_2_averaged'
+out_file_name = 'submissions/amazon_train_1_2_igipop_40_unpolished_averaged'
 row_names = None
 new_data = None
 total_w = 0
